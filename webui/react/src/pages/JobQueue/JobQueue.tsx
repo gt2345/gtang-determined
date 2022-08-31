@@ -16,14 +16,14 @@ import { cancelExperiment, getJobQ, getJobQStats, killExperiment, killTask } fro
 import * as Api from 'services/api-ts-sdk';
 import ActionDropdown, { Triggers } from 'shared/components/ActionDropdown/ActionDropdown';
 import Icon from 'shared/components/Icon/Icon';
-import { isEqual } from 'shared/utils/data';
+import { clone, isEqual } from 'shared/utils/data';
 import { ErrorLevel, ErrorType } from 'shared/utils/error';
 import { routeToReactUrl } from 'shared/utils/routes';
 import { numericSorter } from 'shared/utils/sort';
 import { capitalize } from 'shared/utils/string';
 import { Job, JobAction, JobState, JobType, ResourcePool, RPStats } from 'types';
 import handleError from 'utils/error';
-import { canManageJob, jobTypeToCommandType, moveJobToPosition,
+import { canManageJob, jobTypeToCommandType, moveJobToTop,
   orderedSchedulers, unsupportedQPosSchedulers } from 'utils/job';
 
 import css from './JobQueue.module.scss';
@@ -32,7 +32,7 @@ import ManageJob from './ManageJob';
 
 interface Props {
   bodyNoPadding?: boolean,
-  jobState?: JobState,
+  jobState: JobState,
   selectedRp: ResourcePool,
 }
 
@@ -46,6 +46,7 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
     } as RPStats)),
   );
   const [ jobs, setJobs ] = useState<Job[]>([]);
+  const [ topJob, setTopJob ] = useState<Job>();
   const [ total, setTotal ] = useState(0);
   const [ canceler ] = useState(new AbortController());
   const [ pageState, setPageState ] = useState<{isLoading: boolean}>({ isLoading: true });
@@ -54,7 +55,7 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
   const {
     settings,
     updateSettings,
-  } = useSettings<Settings>(settingsConfig);
+  } = useSettings<Settings>(settingsConfig(jobState));
 
   const fetchResourcePools = useFetchResourcePools(canceler);
   const isJobOrderAvailable = orderedSchedulers.has(selectedRp.schedulerType);
@@ -69,13 +70,25 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
             offset: settings.tableOffset,
             orderBy,
             resourcePool: selectedRp.name,
+            states: jobState ? [ jobState ] : undefined,
           },
           { signal: canceler.signal },
         ),
         getJobQStats({}, { signal: canceler.signal }),
       ]);
 
+      const firstJobResp = await getJobQ(
+        {
+          limit: 1,
+          offset: 0,
+          resourcePool: selectedRp.name,
+        },
+        { signal: canceler.signal },
+      );
+      const firstJob = firstJobResp.jobs[0];
+
       // Process jobs response.
+      if (firstJob && !isEqual(firstJob, topJob)) setTopJob(firstJob);
       setJobs(jobState ? jobs.jobs.filter((j) => j.summary.state === jobState) : jobs.jobs);
       if (jobs.pagination.total) setTotal(jobs.pagination.total);
 
@@ -91,9 +104,14 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
     } finally {
       setPageState((cur) => ({ ...cur, isLoading: false }));
     }
-  }, [ canceler.signal, selectedRp.name, settings, jobState ]);
+  }, [ canceler.signal, selectedRp.name, settings, jobState, topJob ]);
 
   usePolling(fetchAll, { rerunOnNewFn: true });
+
+  const rpTotalJobCount = useCallback((rpName: string) => {
+    const stats = rpStats.find((rp) => rp.resourcePool === rpName)?.stats;
+    return stats ? stats.queuedCount + stats.scheduledCount : 0;
+  }, [ rpStats ]);
 
   const dropDownOnTrigger = useCallback((job: Job) => {
     const triggers: Triggers<JobAction> = {};
@@ -108,10 +126,10 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
       };
     }
 
-    if (selectedRp && isJobOrderAvailable &&
+    if (selectedRp && isJobOrderAvailable && !!topJob &&
         job.summary.jobsAhead > 0 && canManageJob(job, selectedRp) &&
         !unsupportedQPosSchedulers.has(selectedRp.schedulerType)) {
-      triggers[JobAction.MoveToTop] = () => moveJobToPosition(jobs, job.jobId, 1);
+      triggers[JobAction.MoveToTop] = () => moveJobToTop(topJob, job);
     }
 
     // if job is an experiment type add action to kill it
@@ -138,7 +156,7 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
       };
     });
     return triggers;
-  }, [ selectedRp, isJobOrderAvailable, jobs, fetchAll ]);
+  }, [ selectedRp, isJobOrderAvailable, topJob, fetchAll ]);
 
   const onModalClose = useCallback(() => {
     setManagingJob(undefined);
@@ -174,10 +192,17 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
             );
           };
           break;
-        case SCHEDULING_VAL_KEY:
+        case SCHEDULING_VAL_KEY: {
+          const replaceIndex = settings.columns.findIndex((column) =>
+            [ 'priority', 'weight', 'resourcePool' ].includes(column));
+          const newColumns = clone(settings.columns);
           switch (selectedRp.schedulerType) {
             case Api.V1SchedulerType.SLURM:
               col.title = 'Partition';
+              col.dataIndex = 'resourcePool';
+              break;
+            case Api.V1SchedulerType.PBS:
+              col.title = 'Queue';
               col.dataIndex = 'resourcePool';
               break;
             case Api.V1SchedulerType.PRIORITY:
@@ -190,7 +215,10 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
               col.dataIndex = 'weight';
               break;
           }
+          if (replaceIndex !== -1) newColumns[replaceIndex] = col.dataIndex;
+          if (!isEqual(newColumns, settings.columns)) updateSettings({ columns: newColumns });
           break;
+        }
         case 'jobsAhead':
           if (!isJobOrderAvailable) {
             col.sorter = undefined;
@@ -227,7 +255,13 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ dropDownOnTrigger, selectedRp, jobs, isJobOrderAvailable ]);
+  }, [ isJobOrderAvailable,
+    dropDownOnTrigger,
+    settings.columns,
+    settings.sortKey,
+    settings.sortDesc,
+    selectedRp.schedulerType,
+    updateSettings ]);
 
   useEffect(() => {
     fetchResourcePools();
@@ -236,16 +270,7 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
 
   useEffect(() => {
     setPageState((cur) => ({ ...cur, isLoading: true }));
-    fetchAll();
-    return () => canceler.abort();
-  }, [
-    fetchAll,
-    canceler,
-    settings.sortDesc,
-    settings.sortKey,
-    settings.tableLimit,
-    settings.tableOffset,
-  ]);
+  }, [ settings.sortDesc, settings.sortKey, settings.tableLimit, settings.tableOffset ]);
 
   useEffect(() => {
     if (!managingJob) return;
@@ -301,7 +326,7 @@ const JobQueue: React.FC<Props> = ({ bodyNoPadding, selectedRp, jobState }) => {
         <ManageJob
           initialPool={selectedRp.name}
           job={managingJob}
-          jobs={jobs}
+          jobCount={rpTotalJobCount(selectedRp.name)}
           rpStats={rpStats}
           schedulerType={selectedRp.schedulerType}
           onFinish={onModalClose}

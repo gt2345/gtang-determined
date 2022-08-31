@@ -83,7 +83,7 @@ type FluentConfig struct {
 
 // DefaultFluentConfig stores defaults for k8s-configurable Fluent Bit-related options.
 var DefaultFluentConfig = FluentConfig{
-	Image: "fluent/fluent-bit:1.6",
+	Image: aproto.FluentImage,
 }
 
 type getPodNodeInfo struct{}
@@ -603,7 +603,7 @@ func getDeterminedContainersStatus(
 	statuses []k8sV1.ContainerStatus,
 	containerNames map[string]bool,
 ) ([]*k8sV1.ContainerStatus, error) {
-	containerStatuses := make([]*k8sV1.ContainerStatus, 0)
+	containerStatuses := make([]*k8sV1.ContainerStatus, 0, len(statuses))
 	for idx, containerStatus := range statuses {
 		if _, match := containerNames[containerStatus.Name]; !match {
 			continue

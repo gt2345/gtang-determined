@@ -13,6 +13,7 @@ import useModalJupyterLab from 'hooks/useModal/JupyterLab/useModalJupyterLab';
 import useModalWorkspaceCreate from 'hooks/useModal/Workspace/useModalWorkspaceCreate';
 import useSettings, { BaseType, SettingsConfig } from 'hooks/useSettings';
 import { clusterStatusText } from 'pages/Clusters/ClustersOverview';
+import WorkspaceQuickSearch from 'pages/WorkspaceDetails/WorkspaceQuickSearch';
 import WorkspaceActionDropdown from 'pages/WorkspaceList/WorkspaceActionDropdown';
 import { paths } from 'routes/utils';
 import Icon from 'shared/components/Icon/Icon';
@@ -163,11 +164,16 @@ const NavigationSideBar: React.FC = () => {
         <header>
           <Dropdown
             content={(
-              <Menu items={[
-                { key: 'theme-toggle', label: <ThemeToggle /> },
-                { key: 'settings', label: <Link path={paths.settings('account')}>Settings</Link> },
-                { key: 'sign-out', label: <Link path={paths.logout()}>Sign Out</Link> },
-              ]}
+              <Menu
+                items={[
+                  { key: 'theme-toggle', label: <ThemeToggle /> },
+                  {
+                    key: 'settings',
+                    label: <Link path={paths.settings('account')}>Settings</Link>,
+                  },
+                  { key: 'sign-out', label: <Link path={paths.logout()}>Sign Out</Link> },
+                ]}
+                selectable={false}
               />
             )}
             offset={settings.navbarCollapsed ? { x: -8, y: 16 } : { x: 16, y: -8 }}
@@ -184,7 +190,7 @@ const NavigationSideBar: React.FC = () => {
               </Button>
               {settings.navbarCollapsed ? (
                 <Button className={css.launchIcon} onClick={() => openJupyterLabModal()}>
-                  <Icon name="add-small" size="tiny" />
+                  <Icon name="jupyter-lab" />
                 </Button>
               ) : null}
             </div>
@@ -203,9 +209,16 @@ const NavigationSideBar: React.FC = () => {
           <section className={css.workspaces}>
             <NavigationItem
               action={(
-                <Button type="text" onClick={handleCreateWorkspace}>
-                  <Icon name="add-small" size="tiny" />
-                </Button>
+                <div className={css.actionButtons}>
+                  <WorkspaceQuickSearch>
+                    <Button type="text">
+                      <Icon name="search" size="tiny" />
+                    </Button>
+                  </WorkspaceQuickSearch>
+                  <Button type="text" onClick={handleCreateWorkspace}>
+                    <Icon name="add-small" size="tiny" />
+                  </Button>
+                </div>
               )}
               icon="workspaces"
               key="workspaces"

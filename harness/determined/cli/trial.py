@@ -3,53 +3,68 @@ import json
 import os
 import tarfile
 import tempfile
-import typing
 from argparse import Namespace
 from datetime import datetime
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
+from determined import cli
 from determined.cli import render
-from determined.cli.session import setup_session
-from determined.common import api
+from determined.common import api, constants
 from determined.common.api import authentication, bindings
 from determined.common.declarative_argparse import Arg, Cmd, Group
 from determined.common.experimental import Determined
 
-from .checkpoint import format_checkpoint, format_validation, render_checkpoint
+from .checkpoint import render_checkpoint
 
 
-@authentication.required
-def describe_trial(args: Namespace) -> None:
-    if args.metrics:
-        r = api.get(args.master, "trials/{}/metrics".format(args.trial_id))
+def _workload_container_unpack(
+    container: bindings.v1WorkloadContainer,
+) -> Union[bindings.v1MetricsWorkload, bindings.v1CheckpointWorkload]:
+    result = container.training or container.validation or container.checkpoint
+    assert result is not None
+    return result
+
+
+def _format_state(
+    state: Union[bindings.determinedcheckpointv1State, bindings.determinedexperimentv1State]
+) -> str:
+    return str(state.value).replace("STATE_", "")
+
+
+def _format_validation(validation: Optional[bindings.v1MetricsWorkload]) -> List[Any]:
+    if not validation:
+        return [None, None]
+
+    # TODO(ilia): Get rid of `constants` in favor of the ones from bindings.
+    state = _format_state(validation.state)
+    if state == constants.COMPLETED:
+        return [constants.COMPLETED, json.dumps(validation.metrics.to_json(), indent=4)]
+    elif state in (constants.ACTIVE, constants.ERROR):
+        return [state, None]
     else:
-        r = api.get(args.master, "trials/{}".format(args.trial_id))
+        raise AssertionError("Invalid state: {}".format(validation.state))
 
-    trial = r.json()
 
-    if args.json:
-        print(json.dumps(trial, indent=4))
-        return
+def _format_checkpoint(checkpoint: Optional[bindings.v1CheckpointWorkload]) -> List[Any]:
+    if not checkpoint:
+        return [None, None, None]
 
-    # Print information about the trial itself.
-    headers = [
-        "Experiment ID",
-        "State",
-        "H-Params",
-        "Start Time",
-        "End Time",
-    ]
-    values = [
-        [
-            trial["experiment_id"],
-            trial["state"],
-            json.dumps(trial["hparams"], indent=4),
-            render.format_time(trial["start_time"]),
-            render.format_time(trial["end_time"]),
+    state = _format_state(checkpoint.state)
+    if state in (constants.COMPLETED, constants.DELETED):
+        return [
+            state,
+            checkpoint.uuid,
+            json.dumps(checkpoint.metadata, indent=4),
         ]
-    ]
-    render.tabulate_or_csv(headers, values, args.csv)
+    elif state in (constants.ACTIVE, constants.ERROR):
+        return [checkpoint.state, None, json.dumps(checkpoint.metadata, indent=4)]
+    else:
+        raise AssertionError("Invalid checkpoint state: {}".format(checkpoint.state))
 
+
+def _workloads_tabulate(
+    workloads: Sequence[bindings.v1WorkloadContainer], metrics: bool
+) -> Tuple[List[str], List[List[Any]]]:
     # Print information about individual steps.
     headers = [
         "# of Batches",
@@ -61,20 +76,80 @@ def describe_trial(args: Namespace) -> None:
         "Validation",
         "Validation Metrics",
     ]
-    if args.metrics:
+
+    if metrics:
         headers.append("Workload Metrics")
 
+    values = []
+
+    for w in workloads:
+        w_unpacked = _workload_container_unpack(w)
+
+        row_metrics = []
+        if metrics:
+            metrics_workload = w.training or w.validation
+            if metrics_workload:
+                row_metrics = [json.dumps(metrics_workload.metrics.to_json(), indent=4)]
+
+        values.append(
+            [
+                w_unpacked.totalBatches,
+                _format_state(w_unpacked.state),
+                render.format_time(w_unpacked.endTime),
+                *_format_checkpoint(w.checkpoint),
+                *_format_validation(w.validation),
+                *row_metrics,
+            ]
+        )
+
+    return headers, values
+
+
+@authentication.required
+def describe_trial(args: Namespace) -> None:
+    session = cli.setup_session(args)
+
+    trial_response = bindings.get_GetTrial(session, trialId=args.trial_id)
+
+    def get_with_offset(offset: int) -> bindings.v1GetTrialWorkloadsResponse:
+        return bindings.get_GetTrialWorkloads(
+            session,
+            offset=offset,
+            limit=args.limit,
+            trialId=args.trial_id,
+            includeBatchMetrics=args.metrics,
+        )
+
+    resps = api.read_paginated(get_with_offset, offset=args.offset, pages=args.pages)
+    workloads = [w for r in resps for w in r.workloads]
+
+    if args.json:
+        data = trial_response.to_json()
+        data["workloads"] = [w.to_json() for w in workloads]
+        print(json.dumps(data, indent=4))
+        return
+
+    # Print information about the trial itself.
+    headers = [
+        "Experiment ID",
+        "State",
+        "H-Params",
+        "Start Time",
+        "End Time",
+    ]
+    trial = trial_response.trial
     values = [
         [
-            s["total_batches"],
-            s["state"],
-            render.format_time(s["end_time"]),
-            *format_checkpoint(s["checkpoint"]),
-            *format_validation(s["validation"]),
-            *([json.dumps(s["metrics"], indent=4)] if args.metrics else []),
+            trial.experimentId,
+            trial.state,
+            json.dumps(trial.hparams, indent=4),
+            render.format_time(trial.startTime),
+            render.format_time(trial.endTime),
         ]
-        for s in trial["steps"]
     ]
+    render.tabulate_or_csv(headers, values, args.csv)
+
+    headers, values = _workloads_tabulate(workloads, metrics=args.metrics)
 
     print()
     print("Workloads:")
@@ -189,16 +264,16 @@ def write_api_call(args: Namespace, temp_dir: str) -> Tuple[str, str]:
     api_experiment_filepath = os.path.join(temp_dir, "api_experiment_call.json")
     api_trial_filepath = os.path.join(temp_dir, "api_trial_call.json")
 
-    trial_obj = bindings.get_GetTrial(setup_session(args), trialId=args.trial_id).trial
+    trial_obj = bindings.get_GetTrial(cli.setup_session(args), trialId=args.trial_id).trial
     experiment_id = trial_obj.experimentId
-    exp_obj = bindings.get_GetExperiment(setup_session(args), experimentId=experiment_id)
+    exp_obj = bindings.get_GetExperiment(cli.setup_session(args), experimentId=experiment_id)
 
     create_json_file_in_dir(exp_obj.to_json(), api_experiment_filepath)
     create_json_file_in_dir(trial_obj.to_json(), api_trial_filepath)
     return api_experiment_filepath, api_trial_filepath
 
 
-def create_json_file_in_dir(content: typing.Any, file_path: str) -> None:
+def create_json_file_in_dir(content: Any, file_path: str) -> None:
     with open(file_path, "w") as f:
         json.dump(content, f)
 
@@ -283,11 +358,16 @@ args_description = [
                 "describe trial",
                 [
                     Arg("trial_id", type=int, help="trial ID"),
-                    Arg("--metrics", action="store_true", help="display full metrics"),
+                    Arg(
+                        "--metrics",
+                        action="store_true",
+                        help="display full metrics, such as batch metrics",
+                    ),
                     Group(
                         Arg("--csv", action="store_true", help="print as CSV"),
                         Arg("--json", action="store_true", help="print JSON"),
                     ),
+                    *cli.make_pagination_args(limit=1000),
                 ],
             ),
             Cmd(

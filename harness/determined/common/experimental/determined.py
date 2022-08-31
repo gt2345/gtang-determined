@@ -1,10 +1,10 @@
 import pathlib
 import warnings
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union
 
-from determined.common import check, context, util, yaml
-from determined.common.api import authentication, certs
-from determined.common.experimental import checkpoint, experiment, model, session, trial
+from determined.common import api, context, util, yaml
+from determined.common.api import authentication, bindings, certs
+from determined.common.experimental import checkpoint, experiment, model, trial
 
 
 class _CreateExperimentResponse:
@@ -62,7 +62,7 @@ class Determined:
         # a REST API call against the master.
         auth = authentication.Authentication(master, user, password, try_reauth=True, cert=cert)
 
-        self._session = session.Session(master, user, auth, cert)
+        self._session = api.Session(master, user, auth, cert)
 
     def create_experiment(
         self,
@@ -78,34 +78,40 @@ class Determined:
                 or a dict.
             model_dir(string): directory containing model definition.
         """
-        check.is_instance(
-            config, (str, pathlib.Path, dict), "config parameter must be dictionary or path"
-        )
         if isinstance(config, str):
             with open(config) as f:
-                experiment_config = util.safe_load_yaml_with_exceptions(f)
+                config_text = f.read()
+            _ = util.safe_load_yaml_with_exceptions(config_text)
         elif isinstance(config, pathlib.Path):
             with config.open() as f:
-                experiment_config = util.safe_load_yaml_with_exceptions(f)
+                config_text = f.read()
+            _ = util.safe_load_yaml_with_exceptions(config_text)
         elif isinstance(config, Dict):
-            experiment_config = config
+            yaml_dump = yaml.dump(config)
+            assert yaml_dump is not None
+            config_text = yaml_dump
+        else:
+            raise ValueError("config parameter must be dictionary or path")
 
         if isinstance(model_dir, str):
             model_dir = pathlib.Path(model_dir)
 
-        model_context, _ = context.read_context(model_dir)
+        model_context = context.read_v1_context(model_dir)
 
-        resp = self._session.post(
-            "/api/v1/experiments",
-            json={
-                "config": yaml.safe_dump(experiment_config),
-                "model_definition": model_context,
-            },
+        req = bindings.v1CreateExperimentRequest(
+            # TODO: add this as a param to create_experiment()
+            activate=True,
+            config=config_text,
+            modelDefinition=model_context,
+            # TODO: add these as params to create_experiment()
+            parentId=None,
+            projectId=None,
         )
 
-        exp_id = _CreateExperimentResponse(resp.json()).id
+        resp = bindings.post_CreateExperiment(self._session, body=req)
+
+        exp_id = resp.experiment.id
         exp = experiment.ExperimentReference(exp_id, self._session)
-        exp.activate()
 
         return exp
 
@@ -131,8 +137,8 @@ class Determined:
         Get the :class:`~determined.experimental.Checkpoint` representing the
         checkpoint with the provided UUID.
         """
-        r = self._session.get(f"/api/v1/checkpoints/{uuid}").json()
-        return checkpoint.Checkpoint._from_json(r["checkpoint"], self._session)
+        resp = bindings.get_GetCheckpoint(self._session, checkpointUuid=uuid)
+        return checkpoint.Checkpoint._from_bindings(resp.checkpoint, self._session)
 
     def create_model(
         self,
@@ -149,12 +155,15 @@ class Determined:
             description (string, optional): A description of the model.
             metadata (dict, optional): Dictionary of metadata to add to the model.
         """
-        r = self._session.post(
-            "/api/v1/models",
-            json={"description": description, "metadata": metadata, "name": name, "labels": labels},
+
+        # TODO: add notes param to create_model()
+        req = bindings.v1PostModelRequest(
+            name=name, description=description, labels=labels, metadata=metadata, notes=None
         )
 
-        return model.Model._from_json(r.json().get("model"), self._session)
+        resp = bindings.post_PostModel(self._session, body=req)
+
+        return model.Model._from_bindings(resp.model, self._session)
 
     def get_model(self, identifier: Union[str, int]) -> model.Model:
         """
@@ -166,9 +175,9 @@ class Determined:
         Arguments:
             identifier (string, int): The unique name or ID of the model.
         """
-        r = self._session.get(f"/api/v1/models/{identifier}").json()
-        assert r.get("model", False)
-        return model.Model._from_json(r.get("model"), self._session)
+
+        resp = bindings.get_GetModel(self._session, modelName=str(identifier))
+        return model.Model._from_bindings(resp.model, self._session)
 
     def get_model_by_id(self, model_id: int) -> model.Model:
         """
@@ -195,9 +204,9 @@ class Determined:
         self,
         sort_by: model.ModelSortBy = model.ModelSortBy.NAME,
         order_by: model.ModelOrderBy = model.ModelOrderBy.ASCENDING,
-        name: str = "",
-        description: str = "",
-        model_id: int = 0,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        model_id: Optional[int] = None,
     ) -> List[model.Model]:
         """
         Get a list of all models in the model registry.
@@ -213,25 +222,32 @@ class Determined:
             model_id: If this paramter is set, models will be filtered to
                 only include the model with this unique numeric id.
         """
-        r = self._session.get(
-            "/api/v1/models/",
-            params={
-                "sort_by": sort_by.value,
-                "order_by": order_by.value,
-                "name": name,
-                "description": description,
-                "id": model_id,
-            },
-        )
+        # TODO: more parameters?
+        #   - archived
+        #   - labels
+        #   - userIds
+        #   - users
+        def get_with_offset(offset: int) -> bindings.v1GetModelsResponse:
+            return bindings.get_GetModels(
+                self._session,
+                archived=None,
+                description=description,
+                id=model_id,
+                labels=None,
+                name=name,
+                offset=offset,
+                orderBy=order_by._to_bindings(),
+                sortBy=sort_by._to_bindings(),
+                userIds=None,
+                users=None,
+            )
 
-        models = r.json().get("models")
-        return [model.Model._from_json(m, self._session) for m in models]
+        resps = api.read_paginated(get_with_offset)
+
+        return [model.Model._from_bindings(m, self._session) for r in resps for m in r.models]
 
     def get_model_labels(self) -> List[str]:
         """
         Get a list of labels used on any models, sorted from most-popular to least-popular.
         """
-        r = self._session.get("/api/v1/model/labels")
-
-        labels = r.json().get("labels")
-        return cast(List[str], labels)
+        return list(bindings.get_GetModelLabels(self._session).labels)

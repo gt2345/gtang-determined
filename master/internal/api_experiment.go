@@ -12,6 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uptrace/bun"
+
+	"github.com/determined-ai/determined/master/internal/project"
 	"github.com/determined-ai/determined/master/internal/prom"
 	"github.com/determined-ai/determined/master/internal/sproto"
 
@@ -235,26 +238,56 @@ func (a *apiServer) deleteExperiment(exp *model.Experiment, user *model.User) er
 	return nil
 }
 
+func protoStateDBCaseString(
+	enumToValue map[string]int32, colName, serializedName, trimFromPrefix string,
+) string {
+	query := fmt.Sprintf("CASE %s::text ", colName)
+	for enum, v := range enumToValue {
+		query += fmt.Sprintf("WHEN '%s' THEN %d ", strings.TrimPrefix(enum, trimFromPrefix), v)
+	}
+	return query + fmt.Sprintf("END AS %s", serializedName)
+}
+
 func (a *apiServer) GetExperiments(
-	_ context.Context, req *apiv1.GetExperimentsRequest,
+	ctx context.Context, req *apiv1.GetExperimentsRequest,
 ) (*apiv1.GetExperimentsResponse, error) {
-	// Construct the experiment filtering expression.
-	var allStates []string
-	for _, state := range req.States {
-		allStates = append(allStates, strings.TrimPrefix(state.String(), "STATE_"))
-	}
-	stateFilterExpr := strings.Join(allStates, ",")
-	userFilterExpr := strings.Join(req.Users, ",")
-	userIds := make([]string, 0)
-	for _, userID := range req.UserIds {
-		userIds = append(userIds, strconv.Itoa(int(userID)))
-	}
-	userIDFilterExpr := strings.Join(userIds, ",")
-	labelFilterExpr := strings.Join(req.Labels, ",")
-	archivedExpr := ""
-	if req.Archived != nil {
-		archivedExpr = strconv.FormatBool(req.Archived.Value)
-	}
+	resp := &apiv1.GetExperimentsResponse{Experiments: []*experimentv1.Experiment{}}
+	query := db.Bun().NewSelect().
+		Model(&resp.Experiments).
+		ModelTableExpr("experiments as e").
+		Column("e.id").
+		ColumnExpr("e.config->>'description' AS description").
+		ColumnExpr("e.config->>'labels' AS labels").
+		ColumnExpr("proto_time(e.start_time) AS start_time").
+		ColumnExpr("proto_time(e.end_time) AS end_time").
+		ColumnExpr(protoStateDBCaseString(experimentv1.State_value, "e.state", "state", "STATE_")).
+		Column("e.archived").
+		ColumnExpr(
+			"(SELECT COUNT(*) FROM trials t WHERE e.id = t.experiment_id) AS num_trials").
+		// Intentionally not sending trial_ids due to performance.
+		ColumnExpr("COALESCE(u.display_name, u.username) as display_name").
+		ColumnExpr("e.owner_id as user_id").
+		Column("u.username").
+		ColumnExpr("e.config->'resources'->>'resource_pool' AS resource_pool").
+		ColumnExpr("e.config->'searcher'->>'name' AS searcher_type").
+		ColumnExpr("e.config->>'name' as NAME").
+		ColumnExpr(
+			"CASE WHEN NULLIF(e.notes, '') IS NULL THEN NULL ELSE 'omitted' END AS notes").
+		Column("e.job_id").
+		ColumnExpr("CASE WHEN e.parent_id IS NULL THEN NULL ELSE " +
+			"json_build_object('value', e.parent_id) END AS forked_from").
+		ColumnExpr("CASE WHEN e.progress IS NULL THEN NULL ELSE " +
+			"json_build_object('value', e.progress) END AS progress").
+		ColumnExpr("p.name AS project_name").
+		Column("e.project_id").
+		ColumnExpr("w.id AS workspace_id").
+		ColumnExpr("w.name AS workspace_name").
+		ColumnExpr("(w.archived OR p.archived) AS parent_archived").
+		ColumnExpr("p.user_id AS project_owner_id").
+		Column("e.config").
+		Join("JOIN users u ON e.owner_id = u.id").
+		Join("JOIN projects p ON e.project_id = p.id").
+		Join("JOIN workspaces w ON p.workspace_id = w.id")
 
 	// Construct the ordering expression.
 	orderColMap := map[apiv1.GetExperimentsRequest_SortBy]string{
@@ -262,13 +295,13 @@ func (a *apiServer) GetExperiments(
 		apiv1.GetExperimentsRequest_SORT_BY_ID:            "id",
 		apiv1.GetExperimentsRequest_SORT_BY_DESCRIPTION:   "description",
 		apiv1.GetExperimentsRequest_SORT_BY_NAME:          "name",
-		apiv1.GetExperimentsRequest_SORT_BY_START_TIME:    "start_time",
-		apiv1.GetExperimentsRequest_SORT_BY_END_TIME:      "end_time",
-		apiv1.GetExperimentsRequest_SORT_BY_STATE:         "state",
+		apiv1.GetExperimentsRequest_SORT_BY_START_TIME:    "e.start_time",
+		apiv1.GetExperimentsRequest_SORT_BY_END_TIME:      "e.end_time",
+		apiv1.GetExperimentsRequest_SORT_BY_STATE:         "e.state",
 		apiv1.GetExperimentsRequest_SORT_BY_NUM_TRIALS:    "num_trials",
 		apiv1.GetExperimentsRequest_SORT_BY_PROGRESS:      "COALESCE(progress, 0)",
 		apiv1.GetExperimentsRequest_SORT_BY_USER:          "display_name",
-		apiv1.GetExperimentsRequest_SORT_BY_FORKED_FROM:   "forked_from",
+		apiv1.GetExperimentsRequest_SORT_BY_FORKED_FROM:   "e.parent_id",
 		apiv1.GetExperimentsRequest_SORT_BY_RESOURCE_POOL: "resource_pool",
 		apiv1.GetExperimentsRequest_SORT_BY_PROJECT_ID:    "project_id",
 	}
@@ -289,23 +322,104 @@ func (a *apiServer) GetExperiments(
 	default:
 		orderExpr = fmt.Sprintf("id %s", sortByMap[req.OrderBy])
 	}
+	query = query.OrderExpr(orderExpr)
 
-	resp := &apiv1.GetExperimentsResponse{}
-	return resp, a.m.db.QueryProtof(
-		"get_experiments",
-		[]interface{}{orderExpr},
-		resp,
-		stateFilterExpr,
-		archivedExpr,
-		userFilterExpr,
-		userIDFilterExpr,
-		labelFilterExpr,
-		req.Description,
-		req.Name,
-		req.ProjectId,
-		req.Offset,
-		req.Limit,
-	)
+	// Filtering
+	if req.Description != "" {
+		query = query.Where("e.config->>'description' ILIKE ('%%' || ? || '%%')", req.Description)
+	}
+	if req.Name != "" {
+		query = query.Where("e.config->>'name' ILIKE ('%%' || ? || '%%')", req.Name)
+	}
+	if len(req.Labels) > 0 {
+		// In the event labels were removed, if all were removed we insert null,
+		// which previously broke this query.
+		query = query.Where(`string_to_array(?, ',') <@ ARRAY(SELECT jsonb_array_elements_text(
+				CASE WHEN e.config->'labels'::text = 'null'
+				THEN NULL
+				ELSE e.config->'labels' END
+			))`, strings.Join(req.Labels, ",")) // Trying bun.In doesn't work.
+	}
+	if req.Archived != nil {
+		query = query.Where("e.archived = ?", req.Archived.Value)
+	}
+	if len(req.States) > 0 {
+		var allStates []string
+		for _, state := range req.States {
+			allStates = append(allStates, strings.TrimPrefix(state.String(), "STATE_"))
+		}
+		query = query.Where("e.state IN (?)", bun.In(allStates))
+	}
+	if len(req.Users) > 0 {
+		query = query.Where("u.username IN (?)", bun.In(req.Users))
+	}
+	if len(req.UserIds) > 0 {
+		query = query.Where("e.owner_id IN (?)", bun.In(req.UserIds))
+	}
+	if req.ProjectId != 0 {
+		query = query.Where("e.project_id = ?", req.ProjectId)
+	}
+
+	var err error
+	resp.Pagination, err = runPagedBunExperimentsQuery(ctx, query, int(req.Offset), int(req.Limit))
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func runPagedBunExperimentsQuery(
+	ctx context.Context, query *bun.SelectQuery, offset, limit int,
+) (*apiv1.Pagination, error) {
+	// Count number of items without any limits or offsets.
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate end and start indexes.
+	startIndex := offset
+	if offset > total || offset < -total {
+		startIndex = total
+	} else if offset < 0 {
+		startIndex = total + offset
+	}
+
+	endIndex := startIndex + limit
+	switch {
+	case limit == -2:
+		endIndex = startIndex
+	case limit == -1:
+		endIndex = total
+	case limit == 0:
+		endIndex = 100 + startIndex
+		if total < endIndex {
+			endIndex = total
+		}
+	case startIndex+limit > total:
+		endIndex = total
+	}
+
+	// Add start and end index to query.
+	query.Offset(startIndex)
+	query.Limit(endIndex - startIndex)
+
+	// Bun bug treating limit=0 as no limit when it
+	// should be the exact opposite of no records returned.
+	if endIndex-startIndex != 0 {
+		if err = query.Scan(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	return &apiv1.Pagination{
+		Offset:     int32(offset),
+		Limit:      int32(limit),
+		Total:      int32(total),
+		StartIndex: int32(startIndex),
+		EndIndex:   int32(endIndex),
+	}, nil
 }
 
 func (a *apiServer) GetExperimentLabels(_ context.Context,
@@ -400,7 +514,7 @@ func (a *apiServer) PreviewHPSearch(
 		return nil, err
 	}
 	protoSim := &experimentv1.ExperimentSimulation{Seed: req.Seed}
-	indexes := make(map[string]int)
+	indexes := make(map[string]int, len(sim.Results))
 	toProto := func(op searcher.ValidateAfter) ([]*experimentv1.RunnableOperation, error) {
 		return []*experimentv1.RunnableOperation{
 			{
@@ -641,15 +755,10 @@ func (a *apiServer) GetExperimentCheckpoints(
 		return nil, status.Errorf(codes.NotFound, "experiment %d not found", req.Id)
 	}
 
-	// Override the order by for searcher metric.
-	if req.SortBy == apiv1.GetExperimentCheckpointsRequest_SORT_BY_SEARCHER_METRIC {
-		if req.OrderBy != apiv1.OrderBy_ORDER_BY_UNSPECIFIED {
-			return nil, status.Error(
-				codes.InvalidArgument,
-				"cannot specify order by which is implied with sort by searcher metric",
-			)
-		}
-
+	// If SORT_BY_SEARCHER_METRIC is specified without an OrderBy
+	// default to ordering by "better" checkpoints.
+	if req.SortBy == apiv1.GetExperimentCheckpointsRequest_SORT_BY_SEARCHER_METRIC &&
+		req.OrderBy == apiv1.OrderBy_ORDER_BY_UNSPECIFIED {
 		exp, err := a.m.db.ExperimentByID(int(req.Id))
 		if err != nil {
 			return nil, fmt.Errorf("scanning for experiment: %w", err)
@@ -1577,15 +1686,45 @@ func (a *apiServer) GetModelDef(
 }
 
 func (a *apiServer) MoveExperiment(
-	_ context.Context, req *apiv1.MoveExperimentRequest,
+	ctx context.Context, req *apiv1.MoveExperimentRequest,
 ) (*apiv1.MoveExperimentResponse, error) {
-	p, err := a.GetProjectByID(req.DestinationProjectId)
+	curUser, _, err := grpcutil.GetUser(ctx, a.m.db, &a.m.config.InternalConfig.ExternalSessions)
 	if err != nil {
 		return nil, err
 	}
-	if p.Archived {
+
+	// check that user can view destination project
+	destProject, err := a.GetProjectByID(req.DestinationProjectId, *curUser)
+	if err != nil {
+		return nil, err
+	}
+	if destProject.Archived {
 		return nil, errors.Errorf("project (%v) is archived and cannot add new experiments.",
 			req.DestinationProjectId)
+	}
+
+	// get experiment info
+	exp, err := a.getExperiment(int(req.ExperimentId))
+	if err != nil {
+		return nil, err
+	}
+	if exp.Archived {
+		return nil, errors.Errorf("experiment (%v) is archived and cannot be moved.", exp.Id)
+	}
+
+	// check that user can view source project
+	srcProject, err := a.GetProjectByID(exp.ProjectId, *curUser)
+	if err != nil {
+		return nil, err
+	}
+	if srcProject.Archived {
+		return nil, errors.Errorf("project (%v) is archived and cannot have experiments moved from it.",
+			srcProject.Id)
+	}
+
+	if err = project.AuthZProvider.Get().CanMoveProjectExperiments(*curUser, exp, srcProject,
+		destProject); err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	holder := &experimentv1.Experiment{}

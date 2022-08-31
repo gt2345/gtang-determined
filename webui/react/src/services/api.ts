@@ -152,6 +152,12 @@ export const getExperimentDetails = generateDetApi<
   Service.ExperimentDetailsParams, Api.V1GetExperimentResponse, Type.ExperimentBase
 >(Config.getExperimentDetails);
 
+export const getExperimentCheckpoints = generateDetApi<
+  Service.getExperimentCheckpointsParams,
+  Api.V1GetExperimentCheckpointsResponse,
+  Type.CheckpointPagination
+>(Config.getExperimentCheckpoints);
+
 export const getExpTrials = generateDetApi<
   Service.GetTrialsParams, Api.V1GetExperimentTrialsResponse, Type.TrialPagination
 >(Config.getExpTrials);
@@ -309,7 +315,7 @@ export const createWorkspace = generateDetApi<
 >(Config.createWorkspace);
 
 export const deleteWorkspace = generateDetApi<
-  Service.DeleteWorkspaceParams, Api.V1DeleteWorkspaceResponse, void
+  Service.DeleteWorkspaceParams, Api.V1DeleteWorkspaceResponse, Type.DeletionStatus
 >(Config.deleteWorkspace);
 
 export const patchWorkspace = generateDetApi<
@@ -351,7 +357,7 @@ export const createProject = generateDetApi<
 >(Config.createProject);
 
 export const deleteProject = generateDetApi<
-  Service.DeleteProjectParams, Api.V1DeleteProjectResponse, void
+  Service.DeleteProjectParams, Api.V1DeleteProjectResponse, Type.DeletionStatus
 >(Config.deleteProject);
 
 export const patchProject = generateDetApi<

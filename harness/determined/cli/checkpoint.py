@@ -1,43 +1,14 @@
 import json
 from argparse import Namespace
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
-from determined.cli.session import setup_session
-from determined.common import constants, experimental
+from determined import cli
+from determined.common import experimental
 from determined.common.api import authentication, bindings
 from determined.common.declarative_argparse import Arg, Cmd
 from determined.common.experimental import Determined
 
 from . import render
-
-
-def format_validation(validation: Dict[str, Any]) -> List[Any]:
-    if not validation:
-        return [None, None]
-
-    if validation["state"] == constants.COMPLETED:
-        return [constants.COMPLETED, json.dumps(validation["metrics"], indent=4)]
-    elif validation["state"] in (constants.ACTIVE, constants.ERROR):
-        return [validation["state"], None]
-    else:
-        raise AssertionError("Invalid validation state: {}".format(validation["state"]))
-
-
-# TODO(neilc): Report more info about checkpoints and validations.
-def format_checkpoint(checkpoint: Dict[str, Any]) -> List[Any]:
-    if not checkpoint:
-        return [None, None, None]
-
-    if checkpoint["state"] in (constants.COMPLETED, constants.DELETED):
-        return [
-            checkpoint["state"],
-            checkpoint["uuid"],
-            json.dumps(checkpoint["metadata"], indent=4),
-        ]
-    elif checkpoint["state"] in (constants.ACTIVE, constants.ERROR):
-        return [checkpoint["state"], None, json.dumps(checkpoint["metadata"], indent=4)]
-    else:
-        raise AssertionError("Invalid checkpoint state: {}".format(checkpoint["state"]))
 
 
 def render_checkpoint(checkpoint: experimental.Checkpoint, path: Optional[str] = None) -> None:
@@ -75,7 +46,7 @@ def list_checkpoints(args: Namespace) -> None:
     else:
         sorter = bindings.v1GetExperimentCheckpointsRequestSortBy.SORT_BY_END_TIME
     r = bindings.get_GetExperimentCheckpoints(
-        setup_session(args),
+        cli.setup_session(args),
         id=args.experiment_id,
         limit=args.best,
         sortBy=sorter,
@@ -145,7 +116,7 @@ def delete_checkpoints(args: Namespace) -> None:
     ):
         c_uuids = args.checkpoints_uuids.split(",")
         delete_body = bindings.v1DeleteCheckpointsRequest(checkpointUuids=c_uuids)
-        bindings.delete_DeleteCheckpoints(setup_session(args), body=delete_body)
+        bindings.delete_DeleteCheckpoints(cli.setup_session(args), body=delete_body)
         print("Deletion of checkpoints {} is in progress".format(args.checkpoints_uuids))
     else:
         print("Aborting deletion of checkpoints.")

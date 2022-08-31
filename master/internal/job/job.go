@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/pkg/errors"
 
 	"github.com/determined-ai/determined/master/internal/rm"
@@ -32,7 +34,7 @@ func NewJobs(rm rm.ResourceManager) *Jobs {
 func (j *Jobs) parseV1JobMsgs(
 	msgs map[*actor.Ref]actor.Message,
 ) (map[model.JobID]*jobv1.Job, error) {
-	jobs := make(map[model.JobID]*jobv1.Job)
+	jobs := make(map[model.JobID]*jobv1.Job, len(msgs))
 	for _, val := range msgs {
 		if val == nil {
 			continue
@@ -57,14 +59,19 @@ func (j *Jobs) jobQSnapshot(ctx *actor.Context, resourcePool string) (sproto.AQu
 	return resp, nil
 }
 
-func (j *Jobs) getJobs(ctx *actor.Context, resourcePool string, desc bool) ([]*jobv1.Job, error) {
+func (j *Jobs) getJobs(
+	ctx *actor.Context,
+	resourcePool string,
+	desc bool,
+	states []jobv1.State,
+) ([]*jobv1.Job, error) {
 	jobQ, err := j.jobQSnapshot(ctx, resourcePool)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get jobs from the job actors.
-	jobRefs := make([]*actor.Ref, 0)
+	jobRefs := make([]*actor.Ref, 0, len(jobQ))
 	for jID := range jobQ {
 		jobRef, ok := j.actorByID[jID]
 		if ok {
@@ -78,12 +85,18 @@ func (j *Jobs) getJobs(ctx *actor.Context, resourcePool string, desc bool) ([]*j
 	}
 
 	// Merge the results.
-	jobsInRM := make([]*jobv1.Job, 0)
+	jobsInRM := make([]*jobv1.Job, 0, len(jobQ))
 	for jID, jRMInfo := range jobQ {
 		v1Job, ok := jobs[jID]
 		if ok {
+			// interesting that the update is a side effect
+			// of the getJobs function. I am guessing that
+			// I should leave it, regardless of filters?
 			UpdateJobQInfo(v1Job, jRMInfo)
-			jobsInRM = append(jobsInRM, v1Job)
+
+			if states == nil || slices.Contains(states, v1Job.Summary.State) {
+				jobsInRM = append(jobsInRM, v1Job)
+			}
 		}
 	}
 
@@ -130,7 +143,11 @@ func (j *Jobs) Receive(ctx *actor.Context) error {
 		delete(j.actorByID, msg.JobID)
 
 	case *apiv1.GetJobsRequest:
-		jobs, err := j.getJobs(ctx, msg.ResourcePool, msg.OrderBy == apiv1.OrderBy_ORDER_BY_DESC)
+		jobs, err := j.getJobs(
+			ctx,
+			msg.ResourcePool,
+			msg.OrderBy == apiv1.OrderBy_ORDER_BY_DESC,
+			msg.States)
 		if err != nil {
 			ctx.Respond(err)
 			return nil

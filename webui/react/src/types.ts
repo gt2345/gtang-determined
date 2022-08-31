@@ -430,6 +430,10 @@ export interface CoreApiGenericCheckpoint {
   validationMetrics?: Metrics;
 }
 
+export interface CheckpointPagination extends WithPagination {
+  checkpoints: CoreApiGenericCheckpoint[];
+}
+
 export interface TrialPagination extends WithPagination {
   trials: TrialItem[];
 }
@@ -452,7 +456,6 @@ export interface TrialItem extends StartEndTimes {
 export interface TrialDetails extends TrialItem {
   runnerState?: string;
   totalCheckpointSize: number;
-  workloadCount: number;
 }
 
 export interface TrialWorkloads extends WithPagination {
@@ -507,6 +510,7 @@ export interface ExperimentItem {
 export interface ProjectExperiment extends ExperimentItem {
   parentArchived: boolean;
   projectName: string;
+  projectOwnerId: number;
   workspaceId: number;
   workspaceName: string;
 }
@@ -741,11 +745,23 @@ export interface Workspace {
   numExperiments: number;
   numProjects: number;
   pinned: boolean;
+  state: WorkspaceState;
   userId: number;
 }
 
 export interface WorkspacePagination extends WithPagination {
   workspaces: Workspace[];
+}
+
+export interface DeletionStatus {
+  completed: boolean;
+}
+
+export enum WorkspaceState {
+  Deleted = 'DELETED',
+  DeleteFailed = 'DELETE_FAILED',
+  Deleting = 'DELETING',
+  Unspecified = 'UNSPECIFIED',
 }
 
 export interface Note {
@@ -762,6 +778,7 @@ export interface Project {
   notes: Note[];
   numActiveExperiments: number;
   numExperiments: number;
+  state: WorkspaceState;
   userId: number;
   workspaceId: number;
   workspaceName: string;

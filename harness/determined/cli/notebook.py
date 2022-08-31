@@ -5,13 +5,11 @@ from typing import Any, List
 
 from termcolor import colored
 
+from determined import cli
 from determined.cli import command, render, task
-from determined.cli.session import setup_session
-from determined.cli.util import format_args
-from determined.common import api
+from determined.common import api, context
 from determined.common.api import authentication, bindings, request
 from determined.common.check import check_eq
-from determined.common.context import Context
 from determined.common.declarative_argparse import Arg, Cmd, Group
 
 from .command import CONFIG_DESC, CONTEXT_DESC, VOLUME_DESC, parse_config, render_event_stream
@@ -21,25 +19,11 @@ from .command import CONFIG_DESC, CONTEXT_DESC, VOLUME_DESC, parse_config, rende
 def start_notebook(args: Namespace) -> None:
     config = parse_config(args.config_file, None, args.config, args.volume)
 
-    files = None
-    if args.context is not None:
-        context = Context.from_local(args.context)
-        files = [
-            bindings.v1File(
-                content=e.content.decode("utf-8"),
-                gid=e.gid,
-                mode=e.mode,
-                mtime=e.mtime,
-                path=e.path,
-                type=e.type,
-                uid=e.uid,
-            )
-            for e in context.entries
-        ]
+    files = args.context and context.read_v1_context(args.context)
     body = bindings.v1LaunchNotebookRequest(
         config=config, files=files, preview=args.preview, templateName=args.template
     )
-    resp = bindings.post_LaunchNotebook(setup_session(args), body=body)
+    resp = bindings.post_LaunchNotebook(cli.setup_session(args), body=body)
 
     if args.preview:
         print(render.format_object_as_yaml(resp.config))
@@ -95,7 +79,7 @@ args_description = [
                 help="only display the IDs"),
             Arg("--all", "-a", action="store_true",
                 help="show all notebooks (including other users')"),
-            Group(format_args["json"], format_args["csv"]),
+            Group(cli.output_format_args["json"], cli.output_format_args["csv"]),
         ], is_default=True),
         Cmd("config", partial(command.config),
             "display notebook config", [

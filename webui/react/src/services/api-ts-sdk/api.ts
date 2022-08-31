@@ -264,13 +264,13 @@ export enum GetTrialWorkloadsRequestFilterOption {
 }
 
 /**
- * `Any` contains an arbitrary serialized protocol buffer message along with a URL that describes the type of the serialized message.  Protobuf library provides support to pack/unpack Any values in the form of utility functions or additional generated methods of the Any type.  Example 1: Pack and unpack a message in C++.      Foo foo = ...;     Any any;     any.PackFrom(foo);     ...     if (any.UnpackTo(&foo)) {       ...     }  Example 2: Pack and unpack a message in Java.      Foo foo = ...;     Any any = Any.pack(foo);     ...     if (any.is(Foo.class)) {       foo = any.unpack(Foo.class);     }   Example 3: Pack and unpack a message in Python.      foo = Foo(...)     any = Any()     any.Pack(foo)     ...     if any.Is(Foo.DESCRIPTOR):       any.Unpack(foo)       ...   Example 4: Pack and unpack a message in Go       foo := &pb.Foo{...}      any, err := anypb.New(foo)      if err != nil {        ...      }      ...      foo := &pb.Foo{}      if err := any.UnmarshalTo(foo); err != nil {        ...      }  The pack methods provided by protobuf library will by default use 'type.googleapis.com/full.type.name' as the type URL and the unpack methods only use the fully qualified type name after the last '/' in the type URL, for example \"foo.bar.com/x/y.z\" will yield type name \"y.z\".   JSON ==== The JSON representation of an `Any` value uses the regular representation of the deserialized, embedded message, with an additional field `@type` which contains the type URL. Example:      package google.profile;     message Person {       string first_name = 1;       string last_name = 2;     }      {       \"@type\": \"type.googleapis.com/google.profile.Person\",       \"firstName\": <string>,       \"lastName\": <string>     }  If the embedded message type is well-known and has a custom JSON representation, that representation will be embedded adding a field `value` which holds the custom JSON in addition to the `@type` field. Example (for message [google.protobuf.Duration][]):      {       \"@type\": \"type.googleapis.com/google.protobuf.Duration\",       \"value\": \"1.212s\"     }
+ * https://developers.google.com/protocol-buffers/docs/reference/java/com/google/protobuf/Any
  * @export
  * @interface ProtobufAny
  */
 export interface ProtobufAny {
     /**
-     * A URL/resource name that uniquely identifies the type of the serialized protocol buffer message. This string must contain at least one \"/\" character. The last segment of the URL's path must represent the fully qualified name of the type (as in `path/google.protobuf.Duration`). The name should be in a canonical form (e.g., leading \".\" is not accepted).  In practice, teams usually precompile into the binary all types that they expect it to use in the context of Any. However, for URLs which use the scheme `http`, `https`, or no scheme, one can optionally set up a type server that maps type URLs to message definitions as follows:  * If no scheme is provided, `https` is assumed. * An HTTP GET on the URL must yield a [google.protobuf.Type][]   value in binary format, or produce an error. * Applications are allowed to cache lookup results based on the   URL, or have them precompiled into a binary to avoid any   lookup. Therefore, binary compatibility needs to be preserved   on changes to types. (Use versioned type names to manage   breaking changes.)  Note: this functionality is not currently available in the official protobuf release, and it is not used for type URLs beginning with type.googleapis.com.  Schemes other than `http`, `https` (or the empty scheme) might be used with implementation specific semantics.
+     * https://developers.google.com/protocol-buffers/docs/reference/java/com/google/protobuf/Any
      * @type {string}
      * @memberof ProtobufAny
      */
@@ -643,14 +643,13 @@ export interface StreamResultOfV1TrialsSnapshotResponse {
 }
 
 /**
- * The reason for an early exit.   - EXITED_REASON_UNSPECIFIED: Zero-value (not allowed).  - EXITED_REASON_INVALID_HP: Indicates the trial exited due to an invalid hyperparameter.  - EXITED_REASON_USER_REQUESTED_STOP: Indicates the trial exited due to a user requested stop.  - EXITED_REASON_INIT_INVALID_HP: Indicates the trial exited due to an invalid hyperparameter in the trial init.
+ * The reason for an early exit.   - EXITED_REASON_UNSPECIFIED: Zero-value (not allowed).  - EXITED_REASON_INVALID_HP: Indicates the trial exited due to an invalid hyperparameter.  - EXITED_REASON_INIT_INVALID_HP: Indicates the trial exited due to an invalid hyperparameter in the trial init.
  * @export
  * @enum {string}
  */
 export enum TrialEarlyExitExitedReason {
     UNSPECIFIED = <any> 'EXITED_REASON_UNSPECIFIED',
     INVALIDHP = <any> 'EXITED_REASON_INVALID_HP',
-    USERREQUESTEDSTOP = <any> 'EXITED_REASON_USER_REQUESTED_STOP',
     INITINVALIDHP = <any> 'EXITED_REASON_INIT_INVALID_HP'
 }
 
@@ -774,12 +773,6 @@ export interface Trialv1Trial {
      * @memberof Trialv1Trial
      */
     totalCheckpointSize?: string;
-    /**
-     * Number of training and validation workloads.
-     * @type {number}
-     * @memberof Trialv1Trial
-     */
-    workloadCount?: number;
 }
 
 /**
@@ -1203,7 +1196,7 @@ export interface V1Checkpoint {
      * @type {Determinedcheckpointv1State}
      * @memberof V1Checkpoint
      */
-    state?: Determinedcheckpointv1State;
+    state: Determinedcheckpointv1State;
     /**
      * Training-related data for this checkpoint.
      * @type {V1CheckpointTrainingMetadata}
@@ -1298,6 +1291,12 @@ export interface V1CheckpointWorkload {
      * @memberof V1CheckpointWorkload
      */
     totalBatches: number;
+    /**
+     * User defined metadata associated with the checkpoint.
+     * @type {any}
+     * @memberof V1CheckpointWorkload
+     */
+    metadata?: any;
 }
 
 /**
@@ -1668,6 +1667,12 @@ export interface V1DeleteModelVersionResponse {
  * @interface V1DeleteProjectResponse
  */
 export interface V1DeleteProjectResponse {
+    /**
+     * Status of deletion.
+     * @type {boolean}
+     * @memberof V1DeleteProjectResponse
+     */
+    completed: boolean;
 }
 
 /**
@@ -1684,6 +1689,12 @@ export interface V1DeleteTemplateResponse {
  * @interface V1DeleteWorkspaceResponse
  */
 export interface V1DeleteWorkspaceResponse {
+    /**
+     * Status of deletion.
+     * @type {boolean}
+     * @memberof V1DeleteWorkspaceResponse
+     */
+    completed: boolean;
 }
 
 /**
@@ -1995,13 +2006,19 @@ export interface V1Experiment {
      * @type {any}
      * @memberof V1Experiment
      */
-    config?: any;
+    config: any;
     /**
      * The original configuration that the user submitted.
      * @type {string}
      * @memberof V1Experiment
      */
     originalConfig: string;
+    /**
+     * The id of the user who created the parent project.
+     * @type {number}
+     * @memberof V1Experiment
+     */
+    projectOwnerId: number;
 }
 
 /**
@@ -2131,7 +2148,7 @@ export interface V1FileNode {
 }
 
 /**
- * The fitting policy of the scheduler.   - FITTING_POLICY_UNSPECIFIED: Unspecified. This value will never actually be returned by the API, it is just an artifact of using protobuf.  - FITTING_POLICY_BEST: Best fit. Tasks are preferentially “packed” together on the smallest number of agents  - FITTING_POLICY_WORST: Worst fit. Tasks are placed on under-utilized agents, spreading out the tasks.  - FITTING_POLICY_KUBERNETES: A kubernetes placeholder. In k8s, the task placement is delegated to the k8s scheduler so the fitting policy is not relevant.  - FITTING_POLICY_SLURM: A slurm placeholder. When running on slurm, task placement is delegated.
+ * The fitting policy of the scheduler.   - FITTING_POLICY_UNSPECIFIED: Unspecified. This value will never actually be returned by the API, it is just an artifact of using protobuf.  - FITTING_POLICY_BEST: Best fit. Tasks are preferentially “packed” together on the smallest number of agents  - FITTING_POLICY_WORST: Worst fit. Tasks are placed on under-utilized agents, spreading out the tasks.  - FITTING_POLICY_KUBERNETES: A kubernetes placeholder. In k8s, the task placement is delegated to the k8s scheduler so the fitting policy is not relevant.  - FITTING_POLICY_SLURM: A slurm placeholder. When running on slurm, task placement is delegated.  - FITTING_POLICY_PBS: A PBS placeholder. When running on PBS, task placement is delegated.
  * @export
  * @enum {string}
  */
@@ -2140,7 +2157,8 @@ export enum V1FittingPolicy {
     BEST = <any> 'FITTING_POLICY_BEST',
     WORST = <any> 'FITTING_POLICY_WORST',
     KUBERNETES = <any> 'FITTING_POLICY_KUBERNETES',
-    SLURM = <any> 'FITTING_POLICY_SLURM'
+    SLURM = <any> 'FITTING_POLICY_SLURM',
+    PBS = <any> 'FITTING_POLICY_PBS'
 }
 
 /**
@@ -2245,7 +2263,7 @@ export interface V1GetCheckpointResponse {
      * @type {V1Checkpoint}
      * @memberof V1GetCheckpointResponse
      */
-    checkpoint?: V1Checkpoint;
+    checkpoint: V1Checkpoint;
 }
 
 /**
@@ -3173,13 +3191,13 @@ export interface V1GetTrialCheckpointsResponse {
      * @type {Array<V1Checkpoint>}
      * @memberof V1GetTrialCheckpointsResponse
      */
-    checkpoints?: Array<V1Checkpoint>;
+    checkpoints: Array<V1Checkpoint>;
     /**
      * Pagination information of the full dataset.
      * @type {V1Pagination}
      * @memberof V1GetTrialCheckpointsResponse
      */
-    pagination?: V1Pagination;
+    pagination: V1Pagination;
 }
 
 /**
@@ -4137,10 +4155,10 @@ export interface V1MetricsWorkload {
     state: Determinedexperimentv1State;
     /**
      * Metrics.
-     * @type {any}
+     * @type {V1Metrics}
      * @memberof V1MetricsWorkload
      */
-    metrics: any;
+    metrics: V1Metrics;
     /**
      * Number of inputs processed.
      * @type {number}
@@ -4220,13 +4238,13 @@ export interface V1Model {
      * @type {number}
      * @memberof V1Model
      */
-    userId?: number;
+    userId: number;
     /**
      * Whether this model is archived or not.
      * @type {boolean}
      * @memberof V1Model
      */
-    archived?: boolean;
+    archived: boolean;
     /**
      * Notes associated with this model.
      * @type {string}
@@ -4288,7 +4306,7 @@ export interface V1ModelVersion {
      * @type {Date}
      * @memberof V1ModelVersion
      */
-    lastUpdatedTime?: Date;
+    lastUpdatedTime: Date;
     /**
      * Comment associated with this model version.
      * @type {string}
@@ -4300,7 +4318,7 @@ export interface V1ModelVersion {
      * @type {string}
      * @memberof V1ModelVersion
      */
-    username: string;
+    username?: string;
     /**
      * Id of the user who created this model version.
      * @type {number}
@@ -4527,26 +4545,6 @@ export interface V1Pagination {
 }
 
 /**
- * Request to paginate the resposne.
- * @export
- * @interface V1PaginationRequest
- */
-export interface V1PaginationRequest {
-    /**
-     * The number of records to skip before returning results.
-     * @type {number}
-     * @memberof V1PaginationRequest
-     */
-    offset?: number;
-    /**
-     * The amount of records limited in the results.
-     * @type {number}
-     * @memberof V1PaginationRequest
-     */
-    limit?: number;
-}
-
-/**
  * PatchExperiment is a partial update to an experiment with only id required.
  * @export
  * @interface V1PatchExperiment
@@ -4566,10 +4564,10 @@ export interface V1PatchExperiment {
     description?: string;
     /**
      * Labels attached to the experiment.
-     * @type {Array<any>}
+     * @type {Array<string>}
      * @memberof V1PatchExperiment
      */
-    labels?: Array<any>;
+    labels?: Array<string>;
     /**
      * The experiment name.
      * @type {string}
@@ -4624,10 +4622,10 @@ export interface V1PatchModel {
     metadata?: any;
     /**
      * An updated label list for the model.
-     * @type {Array<any>}
+     * @type {Array<string>}
      * @memberof V1PatchModel
      */
-    labels?: Array<any>;
+    labels?: Array<string>;
     /**
      * Updated notes associated with this model.
      * @type {string}
@@ -4682,10 +4680,10 @@ export interface V1PatchModelVersion {
     comment?: string;
     /**
      * An updated label list for the model version.
-     * @type {Array<any>}
+     * @type {Array<string>}
      * @memberof V1PatchModelVersion
      */
-    labels?: Array<any>;
+    labels?: Array<string>;
     /**
      * Updated text notes for the model version.
      * @type {string}
@@ -5282,6 +5280,18 @@ export interface V1Project {
      * @memberof V1Project
      */
     workspaceName?: string;
+    /**
+     * State of project during deletion.
+     * @type {V1WorkspaceState}
+     * @memberof V1Project
+     */
+    state: V1WorkspaceState;
+    /**
+     * Message stored from errors on async-deleting a project.
+     * @type {string}
+     * @memberof V1Project
+     */
+    errorMessage: string;
 }
 
 /**
@@ -6207,7 +6217,7 @@ export enum V1Scale {
 }
 
 /**
- * The type of the Scheduler.   - SCHEDULER_TYPE_UNSPECIFIED: Unspecified. This value will never actually be returned by the API, it is just an artifact of using protobuf.  - SCHEDULER_TYPE_PRIORITY: The priority scheduler.  - SCHEDULER_TYPE_FAIR_SHARE: The fair share scheduler.  - SCHEDULER_TYPE_ROUND_ROBIN: The round robin scheduler  - SCHEDULER_TYPE_KUBERNETES: The kubernetes scheduler.  - SCHEDULER_TYPE_SLURM: A slurm placeholder. When running on slurm, all scheduling behavior is delegated.
+ * The type of the Scheduler.   - SCHEDULER_TYPE_UNSPECIFIED: Unspecified. This value will never actually be returned by the API, it is just an artifact of using protobuf.  - SCHEDULER_TYPE_PRIORITY: The priority scheduler.  - SCHEDULER_TYPE_FAIR_SHARE: The fair share scheduler.  - SCHEDULER_TYPE_ROUND_ROBIN: The round robin scheduler  - SCHEDULER_TYPE_KUBERNETES: The kubernetes scheduler.  - SCHEDULER_TYPE_SLURM: A slurm placeholder. When running on slurm, all scheduling behavior is delegated.  - SCHEDULER_TYPE_PBS: A PBS placeholder. When running on PBS, all scheduling behavior is delegated.
  * @export
  * @enum {string}
  */
@@ -6217,7 +6227,8 @@ export enum V1SchedulerType {
     FAIRSHARE = <any> 'SCHEDULER_TYPE_FAIR_SHARE',
     ROUNDROBIN = <any> 'SCHEDULER_TYPE_ROUND_ROBIN',
     KUBERNETES = <any> 'SCHEDULER_TYPE_KUBERNETES',
-    SLURM = <any> 'SCHEDULER_TYPE_SLURM'
+    SLURM = <any> 'SCHEDULER_TYPE_SLURM',
+    PBS = <any> 'SCHEDULER_TYPE_PBS'
 }
 
 /**
@@ -6883,17 +6894,11 @@ export interface V1TrialMetrics {
      */
     stepsCompleted: number;
     /**
-     * The metrics for this bit of training (reduced over the reporting period).
-     * @type {any}
+     * The metrics for this bit of training, including: - avg_metrics: metrics reduced over the reporting period). - batch_metrics: (optional) per-batch metrics.
+     * @type {V1Metrics}
      * @memberof V1TrialMetrics
      */
-    metrics: any;
-    /**
-     * The batch metrics for this bit of training.
-     * @type {Array<any>}
-     * @memberof V1TrialMetrics
-     */
-    batchMetrics?: Array<any>;
+    metrics: V1Metrics;
 }
 
 /**
@@ -7408,6 +7413,30 @@ export interface V1Workspace {
      * @memberof V1Workspace
      */
     numExperiments: number;
+    /**
+     * State of workspace during deletion.
+     * @type {V1WorkspaceState}
+     * @memberof V1Workspace
+     */
+    state: V1WorkspaceState;
+    /**
+     * Message stored from errors on async-deleting a workspace.
+     * @type {string}
+     * @memberof V1Workspace
+     */
+    errorMessage: string;
+}
+
+/**
+ * WorkspaceState is used to track progress during a deletion.   - WORKSPACE_STATE_UNSPECIFIED: Object deletion is not in progress.  - WORKSPACE_STATE_DELETING: The object is being deleted.  - WORKSPACE_STATE_DELETE_FAILED: The object failed to delete.  - WORKSPACE_STATE_DELETED: The object finished deleting.
+ * @export
+ * @enum {string}
+ */
+export enum V1WorkspaceState {
+    UNSPECIFIED = <any> 'WORKSPACE_STATE_UNSPECIFIED',
+    DELETING = <any> 'WORKSPACE_STATE_DELETING',
+    DELETEFAILED = <any> 'WORKSPACE_STATE_DELETE_FAILED',
+    DELETED = <any> 'WORKSPACE_STATE_DELETED'
 }
 
 
@@ -13185,14 +13214,15 @@ export const InternalApiFetchParamCreator = function (configuration?: Configurat
         /**
          * 
          * @summary Get a list of jobs in queue.
-         * @param {number} [paginationOffset] The number of records to skip before returning results.
-         * @param {number} [paginationLimit] The amount of records limited in the results.
+         * @param {number} [offset] Pagination offset.
+         * @param {number} [limit] Pagination limit.
          * @param {string} [resourcePool] The target resource-pool for agent resource manager.
          * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order results in either ascending or descending order by the number of jobs ahead.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
+         * @param {Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>} [states] Filter to jobs with states among those given.   - STATE_UNSPECIFIED: Unspecified state.  - STATE_QUEUED: Job is queued and waiting to be schedlued.  - STATE_SCHEDULED: Job is scheduled.  - STATE_SCHEDULED_BACKFILLED: Job is scheduled as a backfill.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getJobs(paginationOffset?: number, paginationLimit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', options: any = {}): FetchArgs {
+        getJobs(offset?: number, limit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', states?: Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>, options: any = {}): FetchArgs {
             const localVarPath = `/api/v1/job-queues`;
             const localVarUrlObj = url.parse(localVarPath, true);
             const localVarRequestOptions = Object.assign({ method: 'GET' }, options);
@@ -13207,12 +13237,12 @@ export const InternalApiFetchParamCreator = function (configuration?: Configurat
                 localVarHeaderParameter["Authorization"] = localVarApiKeyValue;
             }
 
-            if (paginationOffset !== undefined) {
-                localVarQueryParameter['pagination.offset'] = paginationOffset;
+            if (offset !== undefined) {
+                localVarQueryParameter['offset'] = offset;
             }
 
-            if (paginationLimit !== undefined) {
-                localVarQueryParameter['pagination.limit'] = paginationLimit;
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
             }
 
             if (resourcePool !== undefined) {
@@ -13221,6 +13251,10 @@ export const InternalApiFetchParamCreator = function (configuration?: Configurat
 
             if (orderBy !== undefined) {
                 localVarQueryParameter['orderBy'] = orderBy;
+            }
+
+            if (states) {
+                localVarQueryParameter['states'] = states;
             }
 
             localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
@@ -13306,10 +13340,11 @@ export const InternalApiFetchParamCreator = function (configuration?: Configurat
          * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
          * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
          * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+         * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options: any = {}): FetchArgs {
+        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options: any = {}): FetchArgs {
             // verify required parameter 'trialId' is not null or undefined
             if (trialId === null || trialId === undefined) {
                 throw new RequiredError('trialId','Required parameter trialId was null or undefined when calling getTrialWorkloads.');
@@ -13347,6 +13382,10 @@ export const InternalApiFetchParamCreator = function (configuration?: Configurat
 
             if (filter !== undefined) {
                 localVarQueryParameter['filter'] = filter;
+            }
+
+            if (includeBatchMetrics !== undefined) {
+                localVarQueryParameter['includeBatchMetrics'] = includeBatchMetrics;
             }
 
             localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
@@ -14544,15 +14583,16 @@ export const InternalApiFp = function(configuration?: Configuration) {
         /**
          * 
          * @summary Get a list of jobs in queue.
-         * @param {number} [paginationOffset] The number of records to skip before returning results.
-         * @param {number} [paginationLimit] The amount of records limited in the results.
+         * @param {number} [offset] Pagination offset.
+         * @param {number} [limit] Pagination limit.
          * @param {string} [resourcePool] The target resource-pool for agent resource manager.
          * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order results in either ascending or descending order by the number of jobs ahead.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
+         * @param {Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>} [states] Filter to jobs with states among those given.   - STATE_UNSPECIFIED: Unspecified state.  - STATE_QUEUED: Job is queued and waiting to be schedlued.  - STATE_SCHEDULED: Job is scheduled.  - STATE_SCHEDULED_BACKFILLED: Job is scheduled as a backfill.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getJobs(paginationOffset?: number, paginationLimit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<V1GetJobsResponse> {
-            const localVarFetchArgs = InternalApiFetchParamCreator(configuration).getJobs(paginationOffset, paginationLimit, resourcePool, orderBy, options);
+        getJobs(offset?: number, limit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', states?: Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<V1GetJobsResponse> {
+            const localVarFetchArgs = InternalApiFetchParamCreator(configuration).getJobs(offset, limit, resourcePool, orderBy, states, options);
             return (fetch: FetchAPI = portableFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -14610,11 +14650,12 @@ export const InternalApiFp = function(configuration?: Configuration) {
          * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
          * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
          * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+         * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<V1GetTrialWorkloadsResponse> {
-            const localVarFetchArgs = InternalApiFetchParamCreator(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, options);
+        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<V1GetTrialWorkloadsResponse> {
+            const localVarFetchArgs = InternalApiFetchParamCreator(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, includeBatchMetrics, options);
             return (fetch: FetchAPI = portableFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -15173,15 +15214,16 @@ export const InternalApiFactory = function (configuration?: Configuration, fetch
         /**
          * 
          * @summary Get a list of jobs in queue.
-         * @param {number} [paginationOffset] The number of records to skip before returning results.
-         * @param {number} [paginationLimit] The amount of records limited in the results.
+         * @param {number} [offset] Pagination offset.
+         * @param {number} [limit] Pagination limit.
          * @param {string} [resourcePool] The target resource-pool for agent resource manager.
          * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order results in either ascending or descending order by the number of jobs ahead.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
+         * @param {Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>} [states] Filter to jobs with states among those given.   - STATE_UNSPECIFIED: Unspecified state.  - STATE_QUEUED: Job is queued and waiting to be schedlued.  - STATE_SCHEDULED: Job is scheduled.  - STATE_SCHEDULED_BACKFILLED: Job is scheduled as a backfill.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getJobs(paginationOffset?: number, paginationLimit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', options?: any) {
-            return InternalApiFp(configuration).getJobs(paginationOffset, paginationLimit, resourcePool, orderBy, options)(fetch, basePath);
+        getJobs(offset?: number, limit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', states?: Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>, options?: any) {
+            return InternalApiFp(configuration).getJobs(offset, limit, resourcePool, orderBy, states, options)(fetch, basePath);
         },
         /**
          * 
@@ -15212,11 +15254,12 @@ export const InternalApiFactory = function (configuration?: Configuration, fetch
          * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
          * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
          * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+         * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options?: any) {
-            return InternalApiFp(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, options)(fetch, basePath);
+        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options?: any) {
+            return InternalApiFp(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, includeBatchMetrics, options)(fetch, basePath);
         },
         /**
          * 
@@ -15661,16 +15704,17 @@ export class InternalApi extends BaseAPI {
     /**
      * 
      * @summary Get a list of jobs in queue.
-     * @param {number} [paginationOffset] The number of records to skip before returning results.
-     * @param {number} [paginationLimit] The amount of records limited in the results.
+     * @param {number} [offset] Pagination offset.
+     * @param {number} [limit] Pagination limit.
      * @param {string} [resourcePool] The target resource-pool for agent resource manager.
      * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order results in either ascending or descending order by the number of jobs ahead.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
+     * @param {Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>} [states] Filter to jobs with states among those given.   - STATE_UNSPECIFIED: Unspecified state.  - STATE_QUEUED: Job is queued and waiting to be schedlued.  - STATE_SCHEDULED: Job is scheduled.  - STATE_SCHEDULED_BACKFILLED: Job is scheduled as a backfill.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof InternalApi
      */
-    public getJobs(paginationOffset?: number, paginationLimit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', options?: any) {
-        return InternalApiFp(this.configuration).getJobs(paginationOffset, paginationLimit, resourcePool, orderBy, options)(this.fetch, this.basePath);
+    public getJobs(offset?: number, limit?: number, resourcePool?: string, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', states?: Array<'STATE_UNSPECIFIED' | 'STATE_QUEUED' | 'STATE_SCHEDULED' | 'STATE_SCHEDULED_BACKFILLED'>, options?: any) {
+        return InternalApiFp(this.configuration).getJobs(offset, limit, resourcePool, orderBy, states, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -15706,12 +15750,13 @@ export class InternalApi extends BaseAPI {
      * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
      * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
      * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+     * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof InternalApi
      */
-    public getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options?: any) {
-        return InternalApiFp(this.configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, options)(this.fetch, this.basePath);
+    public getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options?: any) {
+        return InternalApiFp(this.configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, includeBatchMetrics, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -20956,10 +21001,11 @@ export const TrialsApiFetchParamCreator = function (configuration?: Configuratio
          * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
          * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
          * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+         * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options: any = {}): FetchArgs {
+        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options: any = {}): FetchArgs {
             // verify required parameter 'trialId' is not null or undefined
             if (trialId === null || trialId === undefined) {
                 throw new RequiredError('trialId','Required parameter trialId was null or undefined when calling getTrialWorkloads.');
@@ -20997,6 +21043,10 @@ export const TrialsApiFetchParamCreator = function (configuration?: Configuratio
 
             if (filter !== undefined) {
                 localVarQueryParameter['filter'] = filter;
+            }
+
+            if (includeBatchMetrics !== undefined) {
+                localVarQueryParameter['includeBatchMetrics'] = includeBatchMetrics;
             }
 
             localVarUrlObj.query = Object.assign({}, localVarUrlObj.query, localVarQueryParameter, options.query);
@@ -21338,11 +21388,12 @@ export const TrialsApiFp = function(configuration?: Configuration) {
          * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
          * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
          * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+         * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<V1GetTrialWorkloadsResponse> {
-            const localVarFetchArgs = TrialsApiFetchParamCreator(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, options);
+        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options?: any): (fetch?: FetchAPI, basePath?: string) => Promise<V1GetTrialWorkloadsResponse> {
+            const localVarFetchArgs = TrialsApiFetchParamCreator(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, includeBatchMetrics, options);
             return (fetch: FetchAPI = portableFetch, basePath: string = BASE_PATH) => {
                 return fetch(basePath + localVarFetchArgs.url, localVarFetchArgs.options).then((response) => {
                     if (response.status >= 200 && response.status < 300) {
@@ -21507,11 +21558,12 @@ export const TrialsApiFactory = function (configuration?: Configuration, fetch?:
          * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
          * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
          * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+         * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options?: any) {
-            return TrialsApiFp(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, options)(fetch, basePath);
+        getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options?: any) {
+            return TrialsApiFp(configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, includeBatchMetrics, options)(fetch, basePath);
         },
         /**
          * 
@@ -21638,12 +21690,13 @@ export class TrialsApi extends BaseAPI {
      * @param {number} [limit] Limit the number of workloads. A value of 0 denotes no limit.
      * @param {string} [sortKey] Sort workloads by batches, a training metric, or a validation metric.
      * @param {'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION'} [filter] Filter workloads with validation and/or checkpoint information.   - FILTER_OPTION_UNSPECIFIED: Any workload.  - FILTER_OPTION_CHECKPOINT: Only workloads with an associated checkpoint.  - FILTER_OPTION_VALIDATION: Only validation workloads.  - FILTER_OPTION_CHECKPOINT_OR_VALIDATION: Only validation workloads or ones with an associated checkpoint.
+     * @param {boolean} [includeBatchMetrics] Include per-batch metrics.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TrialsApi
      */
-    public getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', options?: any) {
-        return TrialsApiFp(this.configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, options)(this.fetch, this.basePath);
+    public getTrialWorkloads(trialId: number, orderBy?: 'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC', offset?: number, limit?: number, sortKey?: string, filter?: 'FILTER_OPTION_UNSPECIFIED' | 'FILTER_OPTION_CHECKPOINT' | 'FILTER_OPTION_VALIDATION' | 'FILTER_OPTION_CHECKPOINT_OR_VALIDATION', includeBatchMetrics?: boolean, options?: any) {
+        return TrialsApiFp(this.configuration).getTrialWorkloads(trialId, orderBy, offset, limit, sortKey, filter, includeBatchMetrics, options)(this.fetch, this.basePath);
     }
 
     /**
@@ -22530,7 +22583,7 @@ export const WorkspacesApiFetchParamCreator = function (configuration?: Configur
         /**
          * 
          * @summary Get projects associated with a workspace.
-         * @param {number} id The id of the workspace.
+         * @param {number} id The id of the workspace. When id is set to 0, return all projects across the all workspaces.
          * @param {'SORT_BY_UNSPECIFIED' | 'SORT_BY_CREATION_TIME' | 'SORT_BY_LAST_EXPERIMENT_START_TIME' | 'SORT_BY_NAME' | 'SORT_BY_DESCRIPTION' | 'SORT_BY_ID'} [sortBy] Sort the projects by the given field.   - SORT_BY_UNSPECIFIED: Returns projects in an unsorted list.  - SORT_BY_CREATION_TIME: Returns projects sorted by time that they were created.  - SORT_BY_LAST_EXPERIMENT_START_TIME: Returns projects sorted by most recent start of an experiment.  - SORT_BY_NAME: Returns projects sorted by name.  - SORT_BY_DESCRIPTION: Returns projects sorted by description.  - SORT_BY_ID: Returns projects sorted by ID.
          * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order projects in either ascending or descending order.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
          * @param {number} [offset] Skip the number of projects before returning results. Negative values denote number of projects to skip from the end before returning results.
@@ -22936,7 +22989,7 @@ export const WorkspacesApiFp = function(configuration?: Configuration) {
         /**
          * 
          * @summary Get projects associated with a workspace.
-         * @param {number} id The id of the workspace.
+         * @param {number} id The id of the workspace. When id is set to 0, return all projects across the all workspaces.
          * @param {'SORT_BY_UNSPECIFIED' | 'SORT_BY_CREATION_TIME' | 'SORT_BY_LAST_EXPERIMENT_START_TIME' | 'SORT_BY_NAME' | 'SORT_BY_DESCRIPTION' | 'SORT_BY_ID'} [sortBy] Sort the projects by the given field.   - SORT_BY_UNSPECIFIED: Returns projects in an unsorted list.  - SORT_BY_CREATION_TIME: Returns projects sorted by time that they were created.  - SORT_BY_LAST_EXPERIMENT_START_TIME: Returns projects sorted by most recent start of an experiment.  - SORT_BY_NAME: Returns projects sorted by name.  - SORT_BY_DESCRIPTION: Returns projects sorted by description.  - SORT_BY_ID: Returns projects sorted by ID.
          * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order projects in either ascending or descending order.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
          * @param {number} [offset] Skip the number of projects before returning results. Negative values denote number of projects to skip from the end before returning results.
@@ -23123,7 +23176,7 @@ export const WorkspacesApiFactory = function (configuration?: Configuration, fet
         /**
          * 
          * @summary Get projects associated with a workspace.
-         * @param {number} id The id of the workspace.
+         * @param {number} id The id of the workspace. When id is set to 0, return all projects across the all workspaces.
          * @param {'SORT_BY_UNSPECIFIED' | 'SORT_BY_CREATION_TIME' | 'SORT_BY_LAST_EXPERIMENT_START_TIME' | 'SORT_BY_NAME' | 'SORT_BY_DESCRIPTION' | 'SORT_BY_ID'} [sortBy] Sort the projects by the given field.   - SORT_BY_UNSPECIFIED: Returns projects in an unsorted list.  - SORT_BY_CREATION_TIME: Returns projects sorted by time that they were created.  - SORT_BY_LAST_EXPERIMENT_START_TIME: Returns projects sorted by most recent start of an experiment.  - SORT_BY_NAME: Returns projects sorted by name.  - SORT_BY_DESCRIPTION: Returns projects sorted by description.  - SORT_BY_ID: Returns projects sorted by ID.
          * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order projects in either ascending or descending order.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
          * @param {number} [offset] Skip the number of projects before returning results. Negative values denote number of projects to skip from the end before returning results.
@@ -23254,7 +23307,7 @@ export class WorkspacesApi extends BaseAPI {
     /**
      * 
      * @summary Get projects associated with a workspace.
-     * @param {number} id The id of the workspace.
+     * @param {number} id The id of the workspace. When id is set to 0, return all projects across the all workspaces.
      * @param {'SORT_BY_UNSPECIFIED' | 'SORT_BY_CREATION_TIME' | 'SORT_BY_LAST_EXPERIMENT_START_TIME' | 'SORT_BY_NAME' | 'SORT_BY_DESCRIPTION' | 'SORT_BY_ID'} [sortBy] Sort the projects by the given field.   - SORT_BY_UNSPECIFIED: Returns projects in an unsorted list.  - SORT_BY_CREATION_TIME: Returns projects sorted by time that they were created.  - SORT_BY_LAST_EXPERIMENT_START_TIME: Returns projects sorted by most recent start of an experiment.  - SORT_BY_NAME: Returns projects sorted by name.  - SORT_BY_DESCRIPTION: Returns projects sorted by description.  - SORT_BY_ID: Returns projects sorted by ID.
      * @param {'ORDER_BY_UNSPECIFIED' | 'ORDER_BY_ASC' | 'ORDER_BY_DESC'} [orderBy] Order projects in either ascending or descending order.   - ORDER_BY_UNSPECIFIED: Returns records in no specific order.  - ORDER_BY_ASC: Returns records in ascending order.  - ORDER_BY_DESC: Returns records in descending order.
      * @param {number} [offset] Skip the number of projects before returning results. Negative values denote number of projects to skip from the end before returning results.

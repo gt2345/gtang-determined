@@ -479,6 +479,24 @@ export const getExperimentDetails: DetApi<
   request: (params, options) => detApi.Experiments.getExperiment(params.id, options),
 };
 
+export const getExperimentCheckpoints: DetApi<
+  Service.getExperimentCheckpointsParams,
+  Api.V1GetExperimentCheckpointsResponse,
+  Type.CheckpointPagination
+> = {
+  name: 'getExperimentCheckpoints',
+  postProcess: (response) => decoder.decodeCheckpoints(response),
+  request: (params, options) => detApi.Experiments.getExperimentCheckpoints(
+    params.id,
+    params.sortBy,
+    params.orderBy,
+    params.offset,
+    params.limit,
+    params.states,
+    options,
+  ),
+};
+
 export const getExpValidationHistory: DetApi<
   SingleEntityParams,
   Api.V1GetExperimentValidationHistoryResponse,
@@ -899,10 +917,10 @@ export const getWorkspaceProjects: DetApi<
 };
 
 export const deleteWorkspace: DetApi<
-  Service.DeleteWorkspaceParams, Api.V1DeleteWorkspaceResponse, void
+  Service.DeleteWorkspaceParams, Api.V1DeleteWorkspaceResponse, Type.DeletionStatus
 > = {
   name: 'deleteWorkspace',
-  postProcess: noOp,
+  postProcess: decoder.mapDeletionStatus,
   request: (params) => detApi.Workspaces.deleteWorkspace(
     params.id,
   ),
@@ -1032,10 +1050,10 @@ export const patchProject: DetApi<
 };
 
 export const deleteProject: DetApi<
-  Service.DeleteProjectParams, Api.V1DeleteProjectResponse, void
+  Service.DeleteProjectParams, Api.V1DeleteProjectResponse, Type.DeletionStatus
 > = {
   name: 'deleteProject',
-  postProcess: noOp,
+  postProcess: decoder.mapDeletionStatus,
   request: (params) => detApi.Projects.deleteProject(params.id),
 };
 
@@ -1231,6 +1249,7 @@ export const getJobQueue: DetApi<
     params.limit,
     params.resourcePool,
     params.orderBy,
+    decoder.decodeJobStates(params.states),
   ),
 };
 

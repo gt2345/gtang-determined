@@ -63,6 +63,7 @@ message GetWorkspaceProjectsRequest {
   int32 limit = 4;
 
   // The id of the workspace.
+  // When id is set to 0, return all projects across the all workspaces.
   int32 id = 5;
 
   // Limit the projects to those matching the name.
@@ -183,7 +184,14 @@ message DeleteWorkspaceRequest {
 }
 
 // Response to DeleteWorkspaceRequest.
-message DeleteWorkspaceResponse {}
+message DeleteWorkspaceResponse {
+  option (grpc.gateway.protoc_gen_swagger.options.openapiv2_schema) = {
+    json_schema: { required: [ "completed" ] }
+  };
+
+  // Status of deletion.
+  bool completed = 1;
+}
 
 // Request for archiving a workspace.
 message ArchiveWorkspaceRequest {

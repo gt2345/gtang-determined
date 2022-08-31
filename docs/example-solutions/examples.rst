@@ -48,9 +48,9 @@ For an introduction to using the training API, please see the Training APIs sect
       -  Penn-Fudan Dataset
       -  :download:`fasterrcnn_coco_pytorch.tgz </examples/fasterrcnn_coco_pytorch.tgz>`
 
-   -  -  PyTorch
+   -  -  PyTorch (:ref:`Model Hub MMDetection <model-hub-mmdetection>`)
       -  COCO
-      -  :download:`mmdetection_pytorch.tgz </examples/mmdetection_pytorch.tgz>`
+      -  :download:`mmdetection.tgz </examples/mmdetection.tgz>`
 
    -  -  PyTorch
       -  COCO
@@ -169,6 +169,10 @@ For an introduction to using the training API, please see the Training APIs sect
    -  -  DeepSpeed (PyTorch)
       -  MNIST / CIFAR-10
       -  :download:`deepspeed_dcgan.tgz </examples/deepspeed_dcgan.tgz>`
+
+   -  -  DeepSpeed (PyTorch)
+      -  CIFAR-10
+      -  :download:`cifar10_cpu_offloading.tgz </examples/cifar10_cpu_offloading.tgz>`
 
 ************************
  HP Search Benchmarking

@@ -35,13 +35,25 @@ const routes: RouteConfig[] = [
   {
     id: 'trialDetails',
     needAuth: true,
-    path: '/experiments/:experimentId/trials/:trialId/:tab?',
+    path: '/experiments/:experimentId/trials/:trialId/:tab',
     title: 'Trial',
   },
   {
     id: 'trialDetails',
     needAuth: true,
-    path: '/trials/:trialId/:tab?',
+    path: '/experiments/:experimentId/trials/:trialId',
+    title: 'Trial',
+  },
+  {
+    id: 'trialDetails',
+    needAuth: true,
+    path: '/trials/:trialId/:tab',
+    title: 'Trial',
+  },
+  {
+    id: 'trialDetails',
+    needAuth: true,
+    path: '/trials/:trialId',
     title: 'Trial',
   },
   {
@@ -113,7 +125,15 @@ const routes: RouteConfig[] = [
     icon: 'cluster',
     id: 'cluster',
     needAuth: true,
-    path: '/cluster/:tab?',
+    path: '/cluster/:tab',
+    redirect: '/clusters',
+    title: 'Cluster',
+  },
+  {
+    icon: 'cluster',
+    id: 'cluster',
+    needAuth: true,
+    path: '/cluster',
     redirect: '/clusters',
     title: 'Cluster',
   },
@@ -121,13 +141,26 @@ const routes: RouteConfig[] = [
     icon: 'cluster',
     id: 'clusters',
     needAuth: true,
-    path: '/clusters/:tab?',
+    path: '/clusters/:tab',
     title: 'Cluster',
+  },
+  {
+    icon: 'cluster',
+    id: 'clusters',
+    needAuth: true,
+    path: '/clusters',
+    title: 'Cluster',
+  },
+
+  {
+    id: 'resourcepool',
+    needAuth: true,
+    path: '/resourcepool/:poolname/:tab',
   },
   {
     id: 'resourcepool',
     needAuth: true,
-    path: '/resourcepool/:poolname/:tab?',
+    path: '/resourcepool/:poolname',
   },
   {
     icon: 'logs',
@@ -170,7 +203,13 @@ const routes: RouteConfig[] = [
   {
     id: 'settings',
     needAuth: true,
-    path: '/settings/:tab?',
+    path: '/settings',
+    title: 'Settings',
+  },
+  {
+    id: 'settings',
+    needAuth: true,
+    path: '/settings/:tab',
     title: 'Settings',
   },
 ];

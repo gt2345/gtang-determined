@@ -18,6 +18,7 @@ import (
 
 	"github.com/determined-ai/determined/master/pkg/model"
 	"github.com/determined-ai/determined/master/pkg/ptrs"
+	"github.com/determined-ai/determined/proto/pkg/commonv1"
 	"github.com/determined-ai/determined/proto/pkg/modelv1"
 	"github.com/determined-ai/determined/proto/pkg/trialv1"
 )
@@ -81,37 +82,20 @@ func requireMockMetrics(
 	m := trialv1.TrialMetrics{
 		TrialId:        int32(tr.ID),
 		StepsCompleted: int32(stepsCompleted),
-		Metrics: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				defaultSearcherMetric: {
-					Kind: &structpb.Value_NumberValue{
-						NumberValue: metricValue,
+		Metrics: &commonv1.Metrics{
+			AvgMetrics: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					defaultSearcherMetric: {
+						Kind: &structpb.Value_NumberValue{
+							NumberValue: metricValue,
+						},
 					},
 				},
 			},
+			BatchMetrics: []*structpb.Struct{},
 		},
-		BatchMetrics: []*structpb.Struct{},
 	}
 	err := db.AddValidationMetrics(context.TODO(), &m)
 	require.NoError(t, err)
 	return &m
-}
-
-func requireMockCheckpoint(
-	t *testing.T, db *PgDB, task *model.Task, allocation *model.Allocation, checkpoint_id int,
-) *model.CheckpointV2 {
-	uuid_val := uuid.New()
-
-	ckpt := model.CheckpointV2{
-		UUID:         uuid_val,
-		TaskID:       task.TaskID,
-		AllocationID: allocation.AllocationID,
-		ReportTime:   time.Now().UTC().Truncate(time.Millisecond),
-		State:        model.ActiveState,
-		Resources:    map[string]int64{"ok": 1.0},
-		Metadata:     model.JSONObjFromMapStringInt64(map[string]int64{"ok": 1.0}),
-	}
-	err := db.AddCheckpointMetadata(context.TODO(), &ckpt)
-	require.NoError(t, err)
-	return &ckpt
 }

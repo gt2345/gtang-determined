@@ -12,7 +12,6 @@ import pytest
 from determined.common import api, yaml
 from determined.common.api import authentication, bindings, certs
 from determined.common.api.bindings import determinedexperimentv1State
-from determined.common.experimental import session
 from tests import config as conf
 from tests.cluster import utils as cluster_utils
 
@@ -66,6 +65,11 @@ def activate_experiment(experiment_id: int) -> None:
 def cancel_experiment(experiment_id: int) -> None:
     bindings.post_CancelExperiment(determined_test_session(), id=experiment_id)
     wait_for_experiment_state(experiment_id, determinedexperimentv1State.STATE_CANCELED)
+
+
+def cancel_trial(trial_id: int) -> None:
+    bindings.post_KillTrial(determined_test_session(), id=trial_id)
+    wait_for_trial_state(trial_id, determinedexperimentv1State.STATE_CANCELED)
 
 
 def wait_for_experiment_state(
@@ -126,6 +130,61 @@ def wait_for_experiment_state(
         )
 
 
+def wait_for_trial_state(
+    trial_id: int,
+    target_state: determinedexperimentv1State,
+    max_wait_secs: int = conf.DEFAULT_MAX_WAIT_SECS,
+    log_every: int = 60,
+) -> None:
+    for seconds_waited in range(max_wait_secs):
+        try:
+            state = trial_state(trial_id)
+        # Ignore network errors while polling for experiment state to avoid a
+        # single network flake to cause a test suite failure. If the master is
+        # unreachable multiple times, this test will fail after max_wait_secs.
+        except api.errors.MasterNotFoundException:
+            logging.warning(
+                "Network failure ignored when polling for state of " "trial {}".format(trial_id)
+            )
+            time.sleep(1)
+            continue
+        except api.errors.NotFoundException:
+            logging.warning("Trial not yet available to check state: " "trial {}".format(trial_id))
+            time.sleep(0.25)
+            continue
+
+        if state == target_state:
+            return
+
+        if is_terminal_state(state):
+            if state != target_state:
+                report_failed_trial(trial_id, target_state=target_state, state=state)
+
+            pytest.fail(
+                f"Trial {trial_id} terminated in {state.value} state, "
+                f"expected {target_state.value}"
+            )
+
+        if seconds_waited > 0 and seconds_waited % log_every == 0:
+            print(
+                f"Waited {seconds_waited} seconds for trial {trial_id} "
+                f"(currently {state.value}) to reach {target_state.value}"
+            )
+
+        time.sleep(1)
+
+    else:
+        state = trial_state(trial_id)
+        if target_state == determinedexperimentv1State.STATE_COMPLETED:
+            cancel_trial(trial_id)
+        report_failed_trial(trial_id, target_state=target_state, state=state)
+        pytest.fail(
+            "Trial did not reach target state {} after {} seconds".format(
+                target_state.value, max_wait_secs
+            )
+        )
+
+
 def experiment_has_active_workload(experiment_id: int) -> bool:
     certs.cli_cert = certs.default_load(conf.make_master_url())
     authentication.cli_auth = authentication.Authentication(conf.make_master_url(), try_reauth=True)
@@ -149,6 +208,21 @@ def wait_for_experiment_active_workload(
     pytest.fail(
         f"The only trial cannot be scheduled within {max_ticks} seconds.",
     )
+
+
+def wait_for_at_least_n_trials(
+    experiment_id: int,
+    n: int,
+    timeout: int = 30,
+) -> List["TrialPlusWorkload"]:
+    """Wait for enough trials to start, then return the trials found."""
+    deadline = time.time() + timeout
+    while True:
+        trials = experiment_trials(experiment_id)
+        if len(trials) >= n:
+            return trials
+        if time.time() > deadline:
+            raise TimeoutError(f"did not see {n} trials running in {timeout}s; trials={trials}")
 
 
 def wait_for_experiment_workload_progress(
@@ -198,11 +272,11 @@ def experiment_first_trial(exp_id: int) -> int:
     return trial_id
 
 
-def determined_test_session() -> session.Session:
+def determined_test_session() -> api.Session:
     murl = conf.make_master_url()
     certs.cli_cert = certs.default_load(murl)
     authentication.cli_auth = authentication.Authentication(murl, try_reauth=True)
-    return session.Session(murl, "determined", authentication.cli_auth, certs.cli_cert)
+    return api.Session(murl, "determined", authentication.cli_auth, certs.cli_cert)
 
 
 def experiment_config_json(experiment_id: int) -> Dict[str, Any]:
@@ -214,6 +288,11 @@ def experiment_config_json(experiment_id: int) -> Dict[str, Any]:
 def experiment_state(experiment_id: int) -> determinedexperimentv1State:
     r = bindings.get_GetExperiment(determined_test_session(), experimentId=experiment_id)
     return r.experiment.state
+
+
+def trial_state(trial_id: int) -> determinedexperimentv1State:
+    r = bindings.get_GetTrial(determined_test_session(), trialId=trial_id)
+    return r.trial.state
 
 
 class TrialPlusWorkload:
@@ -526,8 +605,10 @@ def report_failed_experiment(experiment_id: int) -> None:
         print_trial_logs(trial.trial.id)
 
 
-def report_failed_trial(trial_id: int, state: str) -> None:
-    print(f"Trial {trial_id} was not COMPLETED but {state}", file=sys.stderr)
+def report_failed_trial(
+    trial_id: int, target_state: determinedexperimentv1State, state: determinedexperimentv1State
+) -> None:
+    print(f"Trial {trial_id} was not {target_state.value} but {state.value}", file=sys.stderr)
     print_trial_logs(trial_id)
 
 
@@ -606,7 +687,11 @@ def verify_completed_experiment_metadata(
     for t in trials:
         trial = t.trial
         if trial.state != determinedexperimentv1State.STATE_COMPLETED:
-            report_failed_trial(trial.id, trial.state.value)
+            report_failed_trial(
+                trial.id,
+                target_state=determinedexperimentv1State.STATE_COMPLETED,
+                state=trial.state,
+            )
             pytest.fail(f"Trial {trial.id} was not STATE_COMPLETED but {trial.state.value}")
 
         if not expect_workloads:

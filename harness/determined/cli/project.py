@@ -1,19 +1,19 @@
 import json
 from argparse import Namespace
+from time import sleep
 from typing import Any, Dict, List, Sequence, Tuple
 
-from determined.cli.session import setup_session
+from determined import cli
+from determined.common import api
 from determined.common.api import authentication, bindings, errors
-from determined.common.api.bindings import v1Experiment, v1Project, v1Workspace
 from determined.common.declarative_argparse import Arg, Cmd
-from determined.common.experimental import session
 
 from . import render
 from .workspace import list_workspace_projects, pagination_args, workspace_by_name
 
 
-def render_experiments(args: Namespace, experiments: Sequence[v1Experiment]) -> None:
-    def format_experiment(e: v1Experiment) -> List[Any]:
+def render_experiments(args: Namespace, experiments: Sequence[bindings.v1Experiment]) -> None:
+    def format_experiment(e: bindings.v1Experiment) -> List[Any]:
         result = [
             e.id,
             e.username,
@@ -46,7 +46,7 @@ def render_experiments(args: Namespace, experiments: Sequence[v1Experiment]) -> 
     render.tabulate_or_csv(headers, values, False)
 
 
-def render_project(project: v1Project) -> None:
+def render_project(project: bindings.v1Project) -> None:
     values = [
         project.id,
         project.name,
@@ -59,8 +59,8 @@ def render_project(project: v1Project) -> None:
 
 
 def project_by_name(
-    sess: session.Session, workspace_name: str, project_name: str
-) -> Tuple[v1Workspace, v1Project]:
+    sess: api.Session, workspace_name: str, project_name: str
+) -> Tuple[bindings.v1Workspace, bindings.v1Project]:
     w = workspace_by_name(sess, workspace_name)
     p = bindings.get_GetWorkspaceProjects(sess, id=w.id, name=project_name).projects
     if len(p) == 0:
@@ -73,7 +73,7 @@ def project_by_name(
 
 @authentication.required
 def list_project_experiments(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     (w, p) = project_by_name(sess, args.workspace_name, args.project_name)
     kwargs: Dict[str, Any] = {
         "projectId": p.id,
@@ -104,7 +104,7 @@ def list_project_experiments(args: Namespace) -> None:
 
 @authentication.required
 def create_project(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     w = workspace_by_name(sess, args.workspace_name)
     content = bindings.v1PostProjectRequest(
         name=args.name, description=args.description, workspaceId=w.id
@@ -118,7 +118,7 @@ def create_project(args: Namespace) -> None:
 
 @authentication.required
 def describe_project(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     (w, p) = project_by_name(sess, args.workspace_name, args.project_name)
     if args.json:
         print(json.dumps(p.to_json(), indent=2))
@@ -132,29 +132,37 @@ def describe_project(args: Namespace) -> None:
 
 @authentication.required
 def delete_project(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     (w, p) = project_by_name(sess, args.workspace_name, args.project_name)
-    if p.numExperiments > 0:
-        raise errors.ForbiddenException(
-            authentication.must_cli_auth().get_session_user(),
-            "Projects with associated experiments currently cannot be deleted. "
-            "Use archive to hide projects.",
-        )
     if args.yes or render.yes_or_no(
         'Deleting project "' + args.project_name + '" will result in the \n'
-        "unrecoverable deletion of this project and notes. For a recoverable \n"
-        "alternative, see the 'archive' command. Do you still \n"
+        "unrecoverable deletion of this project and all of its experiments and notes.\n"
+        "For a recoverable alternative, see the 'archive' command. Do you still \n"
         "wish to proceed?"
     ):
-        bindings.delete_DeleteProject(sess, id=p.id)
-        print(f"Successfully deleted project {args.project_name}.")
+        resp = bindings.delete_DeleteProject(sess, id=p.id)
+        if resp.completed:
+            print(f"Successfully deleted project {args.project_name}.")
+        else:
+            print(f"Started deletion of project {args.project_name}...")
+            while True:
+                sleep(2)
+                try:
+                    p = bindings.get_GetProject(sess, id=p.id).project
+                    if p.state == bindings.v1WorkspaceState.WORKSPACE_STATE_DELETE_FAILED:
+                        raise errors.DeleteFailedException(p.errorMessage)
+                    elif p.state == bindings.v1WorkspaceState.WORKSPACE_STATE_DELETING:
+                        print(f"Remaining experiment count: {p.numExperiments}")
+                except errors.NotFoundException:
+                    print("Project deleted successfully.")
+                    break
     else:
         print("Aborting project deletion.")
 
 
 @authentication.required
 def edit_project(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     (w, p) = project_by_name(sess, args.workspace_name, args.project_name)
     updated = bindings.v1PatchProject(name=args.new_name, description=args.description)
     new_p = bindings.patch_PatchProject(sess, body=updated, id=p.id).project
@@ -167,7 +175,7 @@ def edit_project(args: Namespace) -> None:
 
 @authentication.required
 def archive_project(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     (w, p) = project_by_name(sess, args.workspace_name, args.project_name)
     bindings.post_ArchiveProject(sess, id=p.id)
     print(f"Successfully archived project {args.project_name}.")
@@ -175,7 +183,7 @@ def archive_project(args: Namespace) -> None:
 
 @authentication.required
 def unarchive_project(args: Namespace) -> None:
-    sess = setup_session(args)
+    sess = cli.setup_session(args)
     (w, p) = project_by_name(sess, args.workspace_name, args.project_name)
     bindings.post_UnarchiveProject(sess, id=p.id)
     print(f"Successfully un-archived project {args.project_name}.")

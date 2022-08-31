@@ -83,8 +83,28 @@ func (m *Master) getExperimentCheckpointsToGC(c echo.Context) (interface{}, erro
 	if err := api.BindArgs(&args, c); err != nil {
 		return nil, err
 	}
-	return m.db.ExperimentCheckpointsToGCRaw(
+
+	checkpointUUIDs, err := m.db.ExperimentCheckpointsToGCRaw(
 		args.ExperimentID, args.ExperimentBest, args.TrialBest, args.TrialLatest)
+	if err != nil {
+		return nil, err
+	}
+	checkpointsDB, err := m.db.CheckpointByUUIDs(checkpointUUIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	expConfig, err := m.db.ExperimentConfig(args.ExperimentID)
+	if err != nil {
+		return nil, err
+	}
+
+	metricName := expConfig.Searcher().Metric()
+	checkpointsWithMetric := map[string]interface{}{
+		"checkpoints": checkpointsDB, "metric_name": metricName,
+	}
+
+	return checkpointsWithMetric, nil
 }
 
 // @Summary Get individual file from modal definitions for download.
@@ -378,14 +398,10 @@ func (m *Master) parseCreateExperiment(params *CreateExperimentParams, user *mod
 	taskSpec.Owner = user
 
 	// Place experiment in Uncategorized, unless project set in config or CreateExperimentParams
-	// CreateExperimentParams has highest priority (coming from WebUI)
+	// CreateExperimentParams has highest priority.
 	projectID := 1
 	if params.ProjectID == nil {
-		if config.Workspace() == "" && config.Project() != "" {
-			return nil, false, nil,
-				errors.New("workspace and project must both be included in config if one is provided")
-		}
-		if config.Workspace() != "" && config.Project() == "" {
+		if (config.Workspace() == "") != (config.Project() == "") {
 			return nil, false, nil,
 				errors.New("workspace and project must both be included in config if one is provided")
 		}
