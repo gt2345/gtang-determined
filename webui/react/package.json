@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@determined-ai/hermes-parallel-coordinates": "^0.6.1",
-    "ansi-to-html": "^0.7.1",
+    "ansi-to-html": "^0.7.2",
     "antd": "^5.1.7",
     "dayjs": "^1.10.7",
     "debug": "^4.3.4",
